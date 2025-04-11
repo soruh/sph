@@ -26,6 +26,7 @@ class Parameters:
         gamma: specific heat ratio
         c_s: speed of sound
         eta: order of unity
+        cfl: time step size as a fraction of the maximum stable timestep
         """
 
         self.gamma = gamma
