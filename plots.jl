@@ -9,20 +9,68 @@ let
 	using CSV
 	using DataFrames
 	using Plots
+	using Markdown
 end
 
 # ╔═╡ edbb7815-9874-449f-a77d-93105d9cfdae
 function plot_density(η)
 	data = DataFrame(CSV.File("results/results_10_$η.csv"))
 	snapshot = filter(row -> row.time_step == 0, data)
-	snapshot, scatter(snapshot.position, snapshot.density, xlabel="Position", ylabel="Density", title="η=$η", legend=false, xlims=(0, 1), ylims=(4, 12))
+	h = round(snapshot.h[1]; digits=3)
+	snapshot, scatter(snapshot.position, snapshot.density, xlabel="Position", ylabel="Density", title="η=$η, h=$h", legend=false, xlims=(0, 1), ylims=(4, 10.5))
 end
+
+# ╔═╡ 9f078ecd-222f-4146-bacc-b831f822c0ac
+md"# 1. Results for η=3"
+
+# ╔═╡ cf111929-74c8-4c31-a283-65fdc82d0c4e
+snapshot, p = plot_density(3.0);
+
+# ╔═╡ 1b910470-6d40-497e-a13a-fbc7138e7610
+p
+
+# ╔═╡ 1fa2ddfe-6b9b-4e45-ab2d-71bde0e68eb5
+snapshot.density
+
+# ╔═╡ ea11c8d0-0b66-4b8f-a81f-3949385bd421
+snapshot.position
+
+# ╔═╡ 01121dee-d086-4d4e-9c10-317ad8d3df91
+h = round(snapshot.h[1], digits=3)
+
+# ╔═╡ dd9a94d8-9f9e-4b79-a7e4-581de532faa5
+md"## Neighborhood matrix N_ij"
+
+# ╔═╡ 1558f2cf-6e05-4c83-bc13-ab98f61942ff
+neighbors(i) = abs.(snapshot.position .- snapshot.position[i]) .<= 2h
+
+# ╔═╡ 9afee665-b1f1-4411-8572-fae051a00401
+N = hcat(collect(neighbors(i) for i in 1:10)...)
+
+# ╔═╡ 2c5e48db-8251-46c4-92a5-98692e4c88a2
+md"# 2. Density at the Edges
+The density of particles should be equal to the number of particles used. Why is
+this not the case for the particles near x = 0 and x = 1?
+"
+
+# ╔═╡ 581a6d01-e5e3-4688-ab53-e6dbcc50e7a1
+md"As the density calculated by smoothing over a certain distance,
+near the edges (0 and 1) the density is averaged over the neighbouring particles and the empty space outside of the domain. This explains the reduction in the density.
+Near the center the density is smoothed only over neighbouring particles resulting in the expected density of $\rho \approx N$."
+
+# ╔═╡ 47dedba5-a6ce-40e1-b508-dcb3ca952440
+md"# 3. Effects of Varying η"
+
+# ╔═╡ 5e7f89ce-49a5-458e-aba1-29ef8c662df9
+md"Varying $\eta$ directly influences the smoothing length $h$.
+It follows that for an increasing $\eta$, the density of particles towards the edges will reduce as more empty space is included in the smoothing radius.
+This effect affects all particles that are $r \le 2h$ from he edges. (Or, effectivly, neighbors of an imaginary particle at $x=0$ or $x=1$)"
 
 # ╔═╡ 286b0fbc-2e97-4fe9-991c-99f3f34e6383
 plot_density(1.5)[2]
 
-# ╔═╡ eff08a7e-d4ec-4b7e-8468-5b403f52df77
-plot_density(3.6)[2]
+# ╔═╡ 4b64cc29-0969-48b7-9f7a-3ed9ac71f947
+plot_density(3.0)[2]
 
 # ╔═╡ 46139554-de56-4462-9afa-000f481e1daa
 plot_density(5.0)[2]
@@ -35,6 +83,7 @@ PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+Markdown = "d6f4376e-aef5-505a-96c1-9c027394607a"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 
 [compat]
@@ -49,7 +98,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.11.5"
 manifest_format = "2.0"
-project_hash = "0273d62632aac6e126ef93346f1adb4d6a68879b"
+project_hash = "740966c5f3e91a6413a45668872a392387e5693e"
 
 [[deps.AliasTables]]
 deps = ["PtrArrays", "Random"]
@@ -1261,10 +1310,23 @@ version = "1.4.1+2"
 """
 
 # ╔═╡ Cell order:
-# ╠═d60977e0-2416-11f0-2727-1f96cfc68b5c
+# ╟─d60977e0-2416-11f0-2727-1f96cfc68b5c
 # ╠═edbb7815-9874-449f-a77d-93105d9cfdae
+# ╟─9f078ecd-222f-4146-bacc-b831f822c0ac
+# ╠═cf111929-74c8-4c31-a283-65fdc82d0c4e
+# ╠═1b910470-6d40-497e-a13a-fbc7138e7610
+# ╠═1fa2ddfe-6b9b-4e45-ab2d-71bde0e68eb5
+# ╠═ea11c8d0-0b66-4b8f-a81f-3949385bd421
+# ╠═01121dee-d086-4d4e-9c10-317ad8d3df91
+# ╟─dd9a94d8-9f9e-4b79-a7e4-581de532faa5
+# ╠═1558f2cf-6e05-4c83-bc13-ab98f61942ff
+# ╠═9afee665-b1f1-4411-8572-fae051a00401
+# ╟─2c5e48db-8251-46c4-92a5-98692e4c88a2
+# ╟─581a6d01-e5e3-4688-ab53-e6dbcc50e7a1
+# ╟─47dedba5-a6ce-40e1-b508-dcb3ca952440
+# ╟─5e7f89ce-49a5-458e-aba1-29ef8c662df9
 # ╠═286b0fbc-2e97-4fe9-991c-99f3f34e6383
-# ╠═eff08a7e-d4ec-4b7e-8468-5b403f52df77
+# ╠═4b64cc29-0969-48b7-9f7a-3ed9ac71f947
 # ╠═46139554-de56-4462-9afa-000f481e1daa
 # ╠═7f9c0985-f64c-460d-a2b2-075270915e1c
 # ╟─00000000-0000-0000-0000-000000000001

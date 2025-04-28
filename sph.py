@@ -56,8 +56,6 @@ def dW(s, h):
     return (2 / (3 * h**2)) * result
 
 
-
-
 class Parameters:
     """free parameters of the SPH simulation"""
 
@@ -197,11 +195,11 @@ class State:
         if self.file is not None:
 
             if not self.wrote_header:
-                self.file.write(f"time_step,time,index,position,velocity,density\n")
+                self.file.write(f"time_step,dt,h,time,index,position,velocity,density\n")
                 self.wrote_header = True;
 
             for i in range(self.N):
-                self.file.write(f"{time_step},{time},{i},{self.r[i]},{self.v[i]},{self.rho[i]}\n")
+                self.file.write(f"{time_step},{self.dt},{self.h},{time},{i},{self.r[i]},{self.v[i]},{self.rho[i]}\n")
 
 
 def initial_state(file, N, eta):
