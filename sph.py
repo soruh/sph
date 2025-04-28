@@ -1,21 +1,61 @@
-# Tutorial Exercise 1
-# Initial layout for Smoothed Particle Hydrodynamics solver
+# Tutorial Exercise 3
+# Initial implementation for 1D Smoothed Particle Hydrodynamics solver
 #
 # author: Paul Römer 7377945
 
 import numpy as np
+import sys
 
 
-def W(s):
-    """smoothing kernel W"""
-    # use M4 kernel as shown in instructuions
-    raise NotImplementedError("kernel W(s)")
+# def W(h, s):
+#     """smoothing kernel W"""
+#     # use M4 kernel as shown in instructuions
+#     if 0 <= s and s <= 1:
+#         return 2/(3 * h) * (1 - 3/2 * s**2 + 3/4 * s**3)
+#     elif 1 <= s and s <= 2:
+#         return 2/(12 * h) * (2 - s)**3
+#     else:
+#         return 0
 
 
-def dW(s):
-    """gradient of smoothing kernel W"""
-    # use M4 kernel as shown in instructuions
-    raise NotImplementedError("kernel derivative dW(s)")
+# def dW(h, s):
+#     """gradient of smoothing kernel W"""
+#     # use M4 kernel as shown in instructuions
+#     if 0 <= s and s <= 1:
+#         return 2/h**2 * (-s + 3/4 * s**2)
+#     elif 1 <= s and s <= 2:
+#         return -1/(2 * h**2) * (2 - s)**2
+#     else:
+#         return 0
+
+
+# numpy vectorized implemenation of the smoothing kernel
+def W(s, h):
+    s = np.asarray(s)
+    result = np.zeros_like(s)
+
+    mask1 = (s >= 0) & (s <= 1)
+    mask2 = (s > 1) & (s <= 2)
+
+    result[mask1] = 1 - 1.5 * s[mask1]**2 + 0.75 * s[mask1]**3
+    result[mask2] = 0.25 * (2 - s[mask2])**3
+
+    return (2 / (3 * h)) * result
+
+# numpy vectorized implemenation of the smoothing kernel derivative
+def dW(s, h):
+    s = np.asarray(s)
+    result = np.zeros_like(s)
+
+    mask1 = (s >= 0) & (s <= 1)
+    mask2 = (s > 1) & (s <= 2)
+
+    result[mask1] = -3 * s[mask1] + (9/4) * s[mask1]**2
+    result[mask2] = -0.75 * (2 - s[mask2])**2
+
+    return (2 / (3 * h**2)) * result
+
+
 
 
 class Parameters:
@@ -65,6 +105,7 @@ class State:
         self.dt = None
 
         self.file = file
+        self.wrote_header = False
 
         self.m = m
         self.r = r
@@ -75,12 +116,23 @@ class State:
 
     @property
     def N(self):
-        return len(self.p)
+        return len(self.r)
 
     def compute_smoothing_length(self):
         """compute a global smoothing length based on the average spacing"""
-        # eta * mean(min(|r_j - ri|))
-        raise NotImplementedError("compute_smoothing_length")
+
+        # sort positions for cheaper closest distance check
+        r_sorted = np.sort(self.r)
+        diff = np.abs(np.diff(r_sorted))
+
+        # minimum neighbor distance of each particle
+        min_dists = np.empty_like(r_sorted)
+        min_dists[1:-1] = np.minimum(diff[:-1], diff[1:])
+        min_dists[0] = diff[0]
+        min_dists[-1] = diff[-1]
+
+        # mean minimum neighbor distance
+        self.h = eta * np.mean(min_dists)
 
     def neightbors_of(self, i):
         """
@@ -88,13 +140,13 @@ class State:
         a j particle is a neighbor of particle i if |r_i - r_j| <= 2h (including the particle itself)
         """
         # find all indices in self.r for which |r_i - r_j| <= 2h
-        raise NotImplementedError("neightbors_of")
+        return np.where(np.abs(self.r[i] - self.r) <= 2*self.h)[0]
 
     def compute_density_i(self, i):
-        """compute the current at the position of particle i"""
-
-        # compute density by integrating mass over W(neightbors_of(i))
-        raise NotImplementedError("compute_density_i")
+        """compute the current density at the position of particle i"""
+        neighbors = self.neightbors_of(i)
+        s = np.abs(self.r[i] - self.r[neighbors]) / self.h
+        return np.sum(self.m[neighbors] * W(s, self.h))
 
     def compute_density(self):
         """compute the current density at each particle position"""
@@ -105,7 +157,9 @@ class State:
     def compute_pressure(self):
         """compute the pressure at each particle position from the current density using an isothermal ideal gas law"""
 
-        self.P[:] = (self.param.gamma - 1) * self.rho * self.param.u0
+        # self.P[:] = (self.param.gamma - 1) * self.rho * self.v
+        self.P[:] = self.rho * self.v
+
 
     def compute_forces(self):
         """compute the forces -> accelerations acting on each particle from the current pressure, density and particle positions (as well as particle masses)"""
@@ -126,7 +180,7 @@ class State:
         """
 
         # determine timestep as min(\Delta T_{max,i})
-        self.dt = min([self.max_timestep_i(i) for i in range(0, self.N)])
+        self.dt = min([self.max_timestep_i(time_step) for time_step in range(self.N)])
 
     def forward_euler_timestep(self):
         """
@@ -137,42 +191,66 @@ class State:
         self.r += self.v * self.dt
         self.v += self.a * self.dt
 
-    def write_to_file(self):
+    def write_to_file(self, time_step, time):
         """write the current positions and velocities to the output file f (if there is one)"""
 
-        if self.f is not None:
-            # write once csv row containing 2N entries, first the positions, then the velocities
-            raise NotImplementedError("write_to_file")
+        if self.file is not None:
+
+            if not self.wrote_header:
+                self.file.write(f"time_step,time,index,position,velocity,density\n")
+                self.wrote_header = True;
+
+            for i in range(self.N):
+                self.file.write(f"{time_step},{time},{i},{self.r[i]},{self.v[i]},{self.rho[i]}\n")
 
 
-def main(file=None):
+def initial_state(file, N, eta):
+
+    p = np.linspace(0.05, 0.95, N)
+    v = np.zeros(N)
+    m = np.ones(N)
+
+    gamma = 1.0
+    c_s = 1.0
+    cfl = 1.0
+
+    params = Parameters(gamma, c_s, eta, cfl)
+    state = State(params, file, m, p, v)
+
+    return state
+
+
+def main(file, N, eta):
     """perform the computation, optionally write the result to the passed in file `file`"""
 
-    # todo: initial conditions
-    # T = ...
-    # params = Param(gamma, c_s, eta, cfl)
-    # state = State(params, file, m, p, v)
+    state = initial_state(file, N, eta)
 
-    state: State = None
-    T = 10
+    # temporary values as we won't do any time steps
+    T = 1.0
+    state.dt = 0.0
 
     # perfom simulations steps until the total time elapsed has reached the desired end time
     t = 0.0
-    i = 0
-    while t < T:
-        print(f"performing timestep {i:6d} for t/T={(t/T * 100.0):.2%}")
+    time_step = 0
+    # while t < T:
+    while time_step < 1:
+        print(f"performing timestep {time_step:6d} for t/T={(t/T * 100.0):.2%}")
         state.compute_smoothing_length()
         state.compute_density()
-        state.compute_pressure()
-        state.compute_forces()
-        state.determine_timestep()
-        state.forward_euler_timestep()
-        state.write_to_file()
+        # state.compute_pressure()
+        # state.compute_forces()
+        # state.determine_timestep()
+        # state.forward_euler_timestep()
+        state.write_to_file(time_step, t)
 
         t += state.dt
-        i += 1
+        time_step += 1
 
 
 if __name__ == "__main__":
-    with open("results.csv", "w") as f:
-        main(f)
+
+    N = int(sys.argv[1])
+    eta = float(sys.argv[2])
+
+    with open(f"results/results_{N}_{eta}.csv", "w") as f:
+        main(f, N, eta)
