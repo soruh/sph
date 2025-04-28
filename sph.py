@@ -1,7 +1,11 @@
 # Tutorial Exercise 3
 # Initial implementation for 1D Smoothed Particle Hydrodynamics solver
 #
-# author: Paul Römer 7377945
+# authors: 
+# - Paul Römer           7377945
+# - Philip Julius Pupkes 7360318
+# - Alice Coors          7392745
+# - Muhammad Fakhar      7432447
 
 import numpy as np
 import sys

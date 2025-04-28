@@ -12,6 +12,19 @@ let
 	using Markdown
 end
 
+# ╔═╡ 09c69108-503c-4464-80d7-e7cedba6a4f3
+md"# Authors"
+
+# ╔═╡ 90d0227d-637f-4a88-93d3-b8d16123c089
+md"""
+|Author         | Matrikelnummer |
+|:-------------|:----------|
+| Paul Römer | 7377945 |
+| Philip Julius Pupkes | 7360318 |
+| Alice Coors | 7392745 |
+| Muhammad Fakhar | 7432447 |
+"""
+
 # ╔═╡ edbb7815-9874-449f-a77d-93105d9cfdae
 function plot_density(η)
 	data = DataFrame(CSV.File("results/results_10_$η.csv"))
@@ -21,7 +34,7 @@ function plot_density(η)
 end
 
 # ╔═╡ 9f078ecd-222f-4146-bacc-b831f822c0ac
-md"# 1. Results for η=3"
+md"## 1. Results for η=3"
 
 # ╔═╡ cf111929-74c8-4c31-a283-65fdc82d0c4e
 snapshot, p = plot_density(3.0);
@@ -39,7 +52,7 @@ snapshot.position
 h = round(snapshot.h[1], digits=3)
 
 # ╔═╡ dd9a94d8-9f9e-4b79-a7e4-581de532faa5
-md"## Neighborhood matrix N_ij"
+md"### Neighborhood matrix N_ij"
 
 # ╔═╡ 1558f2cf-6e05-4c83-bc13-ab98f61942ff
 neighbors(i) = abs.(snapshot.position .- snapshot.position[i]) .<= 2h
@@ -48,7 +61,7 @@ neighbors(i) = abs.(snapshot.position .- snapshot.position[i]) .<= 2h
 N = hcat(collect(neighbors(i) for i in 1:10)...)
 
 # ╔═╡ 2c5e48db-8251-46c4-92a5-98692e4c88a2
-md"# 2. Density at the Edges
+md"## 2. Density at the Edges
 The density of particles should be equal to the number of particles used. Why is
 this not the case for the particles near x = 0 and x = 1?
 "
@@ -59,7 +72,7 @@ near the edges (0 and 1) the density is averaged over the neighbouring particles
 Near the center the density is smoothed only over neighbouring particles resulting in the expected density of $\rho \approx N$."
 
 # ╔═╡ 47dedba5-a6ce-40e1-b508-dcb3ca952440
-md"# 3. Effects of Varying η"
+md"## 3. Effects of Varying η"
 
 # ╔═╡ 5e7f89ce-49a5-458e-aba1-29ef8c662df9
 md"Varying $\eta$ directly influences the smoothing length $h$.
@@ -67,16 +80,12 @@ It follows that for an increasing $\eta$, the density of particles towards the e
 This effect affects all particles that are $r \le 2h$ from he edges. (Or, effectivly, neighbors of an imaginary particle at $x=0$ or $x=1$)"
 
 # ╔═╡ 286b0fbc-2e97-4fe9-991c-99f3f34e6383
-plot_density(1.5)[2]
-
-# ╔═╡ 4b64cc29-0969-48b7-9f7a-3ed9ac71f947
-plot_density(3.0)[2]
-
-# ╔═╡ 46139554-de56-4462-9afa-000f481e1daa
-plot_density(5.0)[2]
-
-# ╔═╡ 7f9c0985-f64c-460d-a2b2-075270915e1c
-plot_density(10.0)[2]
+plot(
+	plot_density(1.5)[2],
+	plot_density(3.0)[2],
+	plot_density(5.0)[2],
+	plot_density(10.0)[2],
+)
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -1310,6 +1319,8 @@ version = "1.4.1+2"
 """
 
 # ╔═╡ Cell order:
+# ╟─09c69108-503c-4464-80d7-e7cedba6a4f3
+# ╟─90d0227d-637f-4a88-93d3-b8d16123c089
 # ╟─d60977e0-2416-11f0-2727-1f96cfc68b5c
 # ╠═edbb7815-9874-449f-a77d-93105d9cfdae
 # ╟─9f078ecd-222f-4146-bacc-b831f822c0ac
@@ -1326,8 +1337,5 @@ version = "1.4.1+2"
 # ╟─47dedba5-a6ce-40e1-b508-dcb3ca952440
 # ╟─5e7f89ce-49a5-458e-aba1-29ef8c662df9
 # ╠═286b0fbc-2e97-4fe9-991c-99f3f34e6383
-# ╠═4b64cc29-0969-48b7-9f7a-3ed9ac71f947
-# ╠═46139554-de56-4462-9afa-000f481e1daa
-# ╠═7f9c0985-f64c-460d-a2b2-075270915e1c
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
