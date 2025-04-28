@@ -85,7 +85,7 @@ class State:
     def neightbors_of(self, i):
         """
         return the indices of all neighbors of particle i.
-        a j particle is a neighbor of particle i if |r_i - r_j| <= 2h
+        a j particle is a neighbor of particle i if |r_i - r_j| <= 2h (including the particle itself)
         """
         # find all indices in self.r for which |r_i - r_j| <= 2h
         raise NotImplementedError("neightbors_of")
@@ -141,8 +141,8 @@ class State:
         """write the current positions and velocities to the output file f (if there is one)"""
 
         if self.f is not None:
-            # write once csv row containing of 2N entries, first the positions, then the velocities
-            raise NotImplementedError("write")
+            # write once csv row containing 2N entries, first the positions, then the velocities
+            raise NotImplementedError("write_to_file")
 
 
 def main(file=None):
@@ -160,7 +160,7 @@ def main(file=None):
     t = 0.0
     i = 0
     while t < T:
-        print(f"performing timestep {i:6d} for t/T={round(t/T * 100.0, ndigits=3)}%")
+        print(f"performing timestep {i:6d} for t/T={(t/T * 100.0):.2%}")
         state.compute_smoothing_length()
         state.compute_density()
         state.compute_pressure()
