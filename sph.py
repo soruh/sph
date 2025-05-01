@@ -1,7 +1,7 @@
 # Tutorial Exercise 3
 # Initial implementation for 1D Smoothed Particle Hydrodynamics solver
 #
-# authors: 
+# authors:
 # - Paul Römer           7377945
 # - Philip Julius Pupkes 7360318
 # - Alice Coors          7392745
@@ -81,13 +81,14 @@ class Parameters:
 class State:
     """structure storing the simulation state"""
 
-    def __init__(self, param: Parameters, file, m: np.array, r: np.array, v: np.array):
+    def __init__(self, param: Parameters, file, m: np.array, r: np.array, v: np.array, u: np.array):
         """
         initialize the state and set the initial conditions and free parameters of the system
             file: file to write the results to
         m: masses the particles
-        r: initial positions the particles
-        v: initial velocities the particles
+        r: initial positions of the particles
+        v: initial velocities of the particles
+        u: initial internal energies of the particles
         params: free parameters of the simulation
         """
 
@@ -112,6 +113,8 @@ class State:
         self.m = m
         self.r = r
         self.v = v
+        self.u = u
+        self.du = np.zeros(self.N)
         self.a = np.zeros(self.N)
         self.P = np.zeros(self.N)
         self.rho = np.zeros(self.N)
@@ -136,7 +139,7 @@ class State:
         # mean minimum neighbor distance
         self.h = eta * np.mean(min_dists)
 
-    def neightbors_of(self, i):
+    def neighbors_of(self, i):
         """
         return the indices of all neighbors of particle i.
         a j particle is a neighbor of particle i if |r_i - r_j| <= 2h (including the particle itself)
@@ -144,36 +147,33 @@ class State:
         # find all indices in self.r for which |r_i - r_j| <= 2h
         return np.where(np.abs(self.r[i] - self.r) <= 2*self.h)[0]
 
-    def compute_density_i(self, i):
-        """compute the current density at the position of particle i"""
-        neighbors = self.neightbors_of(i)
-        s = np.abs(self.r[i] - self.r[neighbors]) / self.h
-        return np.sum(self.m[neighbors] * W(s, self.h))
-
     def compute_density(self):
         """compute the current density at each particle position"""
-
-        for i in range(0, self.N):
-            self.rho[i] = self.compute_density_i(i)
+        for i in range(self.N):
+            neighbors = self.neighbors_of(i)
+            s = np.abs(self.r[i] - self.r[neighbors]) / self.h
+            self.rho[i] = np.sum(self.m[neighbors] * W(s, self.h))
 
     def compute_pressure(self):
         """compute the pressure at each particle position from the current density using an isothermal ideal gas law"""
-
-        # self.P[:] = (self.param.gamma - 1) * self.rho * self.v
-        self.P[:] = self.rho * self.v
-
+        self.P[:] = (self.param.gamma - 1) * self.rho * self.u
 
     def compute_forces(self):
         """compute the forces -> accelerations acting on each particle from the current pressure, density and particle positions (as well as particle masses)"""
+        for i in range(self.N):
+            neighbors = self.neighbors_of(i)
+            dP = (self.P[i]/self.rho[i]**2) + self.P[neighbors]/self.rho[neighbors]**2
+            r_ij = self.r[i] - self.r[neighbors]
+            s = np.abs(r_ij) / self.h
+            self.a[i] = -np.sum(self.m[neighbors] * dP * dW(s, self.h) * np.sign(self.r[neighbors]))
 
-        # compute self.a by integrating - m_j * (P_i / rho_i^2 + P_j / rho_j^2) over dW(neightbors_of(i))
-        raise NotImplementedError("compute_forces")
-
-    def max_timestep_i(self, i):
-        """determine the local timestep that would fullfill a CFL condition for particle i"""
-
-        # self.cfl * min(h/(h * grad(v)_i) + c), sqrt(h/(abs(a) + c)))
-        raise NotImplementedError("max_timestep_i")
+    def compute_energy_flux(self):
+        for i in range(self.N):
+            neighbors = self.neighbors_of(i)
+            r_ij = self.r[i] - self.r[neighbors]
+            s = np.abs(r_ij) / self.h
+            dv = self.v[i] - self.v[neighbors]
+            self.du[i] = self.P[i]/self.rho[i]**2 * np.sum(self.m[neighbors] * dv * dW(s, self.h) * np.sign(self.r[neighbors]))
 
     def determine_timestep(self):
         """
@@ -181,8 +181,17 @@ class State:
         condition for every particle
         """
 
-        # determine timestep as min(\Delta T_{max,i})
-        self.dt = min([self.max_timestep_i(time_step) for time_step in range(self.N)])
+        epsilon = 1e-8
+
+        dv = np.zeros_like(self.v)
+        for i in range(self.N):
+            neighbors = self.neighbors_of(i)
+            s = np.abs(self.r[i] - self.r[neighbors]) / self.h
+            dv[i] = np.sum(self.m[neighbors] / self.rho[neighbors] * self.v[neighbors] * dW(s, self.h))
+
+        a = self.h / (self.h * np.abs(dv) + self.param.c_s)
+        b = np.sqrt(self.h / (np.abs(self.a) + epsilon))
+        self.dt = self.param.cfl * np.min(np.minimum(a, b))
 
     def forward_euler_timestep(self):
         """
@@ -192,6 +201,7 @@ class State:
 
         self.r += self.v * self.dt
         self.v += self.a * self.dt
+        self.u += self.du * self.dt
 
     def write_to_file(self, time_step, time):
         """write the current positions and velocities to the output file f (if there is one)"""
@@ -199,25 +209,26 @@ class State:
         if self.file is not None:
 
             if not self.wrote_header:
-                self.file.write(f"time_step,dt,h,time,index,position,velocity,density\n")
+                self.file.write("time_step,h,dt,time,index,position,velocity,density,energy\n")
                 self.wrote_header = True;
 
             for i in range(self.N):
-                self.file.write(f"{time_step},{self.dt},{self.h},{time},{i},{self.r[i]},{self.v[i]},{self.rho[i]}\n")
+                self.file.write(f"{time_step},{self.h},{self.dt},{time},{i},{self.r[i]},{self.v[i]},{self.rho[i]},{self.u[i]}\n")
 
 
 def initial_state(file, N, eta):
 
+    cfl = 0.5
+    gamma = 5/3
+    c_s = 1.0
+
     p = np.linspace(0.05, 0.95, N)
     v = np.zeros(N)
-    m = np.ones(N)
-
-    gamma = 1.0
-    c_s = 1.0
-    cfl = 1.0
+    m = np.ones(N) / N
+    u = np.ones(N) * np.sqrt(c_s)
 
     params = Parameters(gamma, c_s, eta, cfl)
-    state = State(params, file, m, p, v)
+    state = State(params, file, m, p, v, u)
 
     return state
 
@@ -227,23 +238,26 @@ def main(file, N, eta):
 
     state = initial_state(file, N, eta)
 
-    # temporary values as we won't do any time steps
-    T = 1.0
-    state.dt = 0.0
+    T = 0.3
+    write_interval = 0.01
 
     # perfom simulations steps until the total time elapsed has reached the desired end time
     t = 0.0
     time_step = 0
-    # while t < T:
-    while time_step < 1:
-        print(f"performing timestep {time_step:6d} for t/T={(t/T * 100.0):.2%}")
+    next_write = 0.0
+    while t < T:
+        print(f"performing timestep {time_step:6d} for t/T={t/T:.2%}")
         state.compute_smoothing_length()
         state.compute_density()
-        # state.compute_pressure()
-        # state.compute_forces()
-        # state.determine_timestep()
-        # state.forward_euler_timestep()
-        state.write_to_file(time_step, t)
+        state.compute_pressure()
+        state.compute_forces()
+        state.compute_energy_flux()
+        state.determine_timestep()
+        state.forward_euler_timestep()
+
+        if t >= next_write:
+            state.write_to_file(time_step, t)
+            next_write += write_interval
 
         t += state.dt
         time_step += 1

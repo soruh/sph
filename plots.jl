@@ -25,67 +25,56 @@ md"""
 | Muhammad Fakhar | 7432447 |
 """
 
-# ╔═╡ edbb7815-9874-449f-a77d-93105d9cfdae
-function plot_density(η)
-	data = DataFrame(CSV.File("results/results_10_$η.csv"))
-	snapshot = filter(row -> row.time_step == 0, data)
-	h = round(snapshot.h[1]; digits=3)
-	snapshot, scatter(snapshot.position, snapshot.density, xlabel="Position", ylabel="Density", title="η=$η, h=$h", legend=false, xlims=(0, 1), ylims=(4, 10.5))
+# ╔═╡ 8ab6534e-ebe2-45ce-9ad8-9c0a2e29dcfc
+N = 100
+
+# ╔═╡ 4043541f-0460-4aa8-b308-1da900e6abfa
+η = 3.0
+
+# ╔═╡ 664b437d-fd53-4c47-a8f7-f362f8e3a5b0
+data = DataFrame(CSV.File("results/results_$(N)_$η.csv"));
+
+# ╔═╡ bc415958-be50-40ce-9e4a-1678eaec3fbb
+plot(data.time, data.dt; xlabel="t", ylabel="dt", legend=false)
+
+# ╔═╡ a10a87dc-e5f3-4358-a044-4368820315a2
+plot(data.time, data.h; xlabel="t", ylabel="h", legend=false)
+
+# ╔═╡ df0c8092-ad1c-40dc-8141-2154797cb8b0
+function closest_timestep(t)
+	i = findmin(eachrow(data)) do row
+		abs(row.time - t)
+	end[2]
+	data.time_step[i]
 end
 
-# ╔═╡ 9f078ecd-222f-4146-bacc-b831f822c0ac
-md"## 1. Results for η=3"
+# ╔═╡ 74f12ae1-d77e-4bca-b750-48b0534e5c52
+time_steps = let
+	[closest_timestep(t) for t in [0.0, 0.1, 0.2, 0.3]]
+end
 
-# ╔═╡ cf111929-74c8-4c31-a283-65fdc82d0c4e
-snapshot, p = plot_density(3.0);
+# ╔═╡ c0ffde40-1d7c-4d29-b1be-e2ad3ebf48e5
+snapshot(i) = filter(data) do row
+	row.time_step == time_steps[i]
+end;
 
-# ╔═╡ 1b910470-6d40-497e-a13a-fbc7138e7610
-p
+# ╔═╡ 68352214-bfa9-473c-a021-b7143bf4385c
+function plot_density(i)
+	s = snapshot(i);
+	plot(s.index, s.density, title="t≈$(round(s.time[1], digits=1))", xlabel="particle index", ylabel="density", label=false)
+end
 
-# ╔═╡ 1fa2ddfe-6b9b-4e45-ab2d-71bde0e68eb5
-snapshot.density
+# ╔═╡ 52b37179-5617-4791-8df6-e905b2940b45
+plot_density(1)
 
-# ╔═╡ ea11c8d0-0b66-4b8f-a81f-3949385bd421
-snapshot.position
+# ╔═╡ f5d63436-d0d4-42ab-a7a5-dd982798aca3
+plot_density(2)
 
-# ╔═╡ 01121dee-d086-4d4e-9c10-317ad8d3df91
-h = round(snapshot.h[1], digits=3)
+# ╔═╡ 5a04ef11-e73f-4bfa-a746-62c76c4419f9
+plot_density(3)
 
-# ╔═╡ dd9a94d8-9f9e-4b79-a7e4-581de532faa5
-md"### Neighborhood matrix N_ij"
-
-# ╔═╡ 1558f2cf-6e05-4c83-bc13-ab98f61942ff
-neighbors(i) = abs.(snapshot.position .- snapshot.position[i]) .<= 2h
-
-# ╔═╡ 9afee665-b1f1-4411-8572-fae051a00401
-N = hcat(collect(neighbors(i) for i in 1:10)...)
-
-# ╔═╡ 2c5e48db-8251-46c4-92a5-98692e4c88a2
-md"## 2. Density at the Edges
-The density of particles should be equal to the number of particles used. Why is
-this not the case for the particles near x = 0 and x = 1?
-"
-
-# ╔═╡ 581a6d01-e5e3-4688-ab53-e6dbcc50e7a1
-md"As the density calculated by smoothing over a certain distance,
-near the edges (0 and 1) the density is averaged over the neighbouring particles and the empty space outside of the domain. This explains the reduction in the density.
-Near the center the density is smoothed only over neighbouring particles resulting in the expected density of $\rho \approx N$."
-
-# ╔═╡ 47dedba5-a6ce-40e1-b508-dcb3ca952440
-md"## 3. Effects of Varying η"
-
-# ╔═╡ 5e7f89ce-49a5-458e-aba1-29ef8c662df9
-md"Varying $\eta$ directly influences the smoothing length $h$.
-It follows that for an increasing $\eta$, the density of particles towards the edges will reduce as more empty space is included in the smoothing radius.
-This effect affects all particles that are $r \le 2h$ from he edges. (Or, effectivly, neighbors of an imaginary particle at $x=0$ or $x=1$)"
-
-# ╔═╡ 286b0fbc-2e97-4fe9-991c-99f3f34e6383
-plot(
-	plot_density(1.5)[2],
-	plot_density(3.0)[2],
-	plot_density(5.0)[2],
-	plot_density(10.0)[2],
-)
+# ╔═╡ ad0ef5fe-4d17-449a-b200-671d1d2370be
+plot_density(4)
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -1322,20 +1311,18 @@ version = "1.4.1+2"
 # ╟─09c69108-503c-4464-80d7-e7cedba6a4f3
 # ╟─90d0227d-637f-4a88-93d3-b8d16123c089
 # ╟─d60977e0-2416-11f0-2727-1f96cfc68b5c
-# ╠═edbb7815-9874-449f-a77d-93105d9cfdae
-# ╟─9f078ecd-222f-4146-bacc-b831f822c0ac
-# ╠═cf111929-74c8-4c31-a283-65fdc82d0c4e
-# ╠═1b910470-6d40-497e-a13a-fbc7138e7610
-# ╠═1fa2ddfe-6b9b-4e45-ab2d-71bde0e68eb5
-# ╠═ea11c8d0-0b66-4b8f-a81f-3949385bd421
-# ╠═01121dee-d086-4d4e-9c10-317ad8d3df91
-# ╟─dd9a94d8-9f9e-4b79-a7e4-581de532faa5
-# ╠═1558f2cf-6e05-4c83-bc13-ab98f61942ff
-# ╠═9afee665-b1f1-4411-8572-fae051a00401
-# ╟─2c5e48db-8251-46c4-92a5-98692e4c88a2
-# ╟─581a6d01-e5e3-4688-ab53-e6dbcc50e7a1
-# ╟─47dedba5-a6ce-40e1-b508-dcb3ca952440
-# ╟─5e7f89ce-49a5-458e-aba1-29ef8c662df9
-# ╠═286b0fbc-2e97-4fe9-991c-99f3f34e6383
+# ╠═8ab6534e-ebe2-45ce-9ad8-9c0a2e29dcfc
+# ╠═4043541f-0460-4aa8-b308-1da900e6abfa
+# ╠═664b437d-fd53-4c47-a8f7-f362f8e3a5b0
+# ╠═bc415958-be50-40ce-9e4a-1678eaec3fbb
+# ╠═a10a87dc-e5f3-4358-a044-4368820315a2
+# ╠═df0c8092-ad1c-40dc-8141-2154797cb8b0
+# ╠═74f12ae1-d77e-4bca-b750-48b0534e5c52
+# ╠═c0ffde40-1d7c-4d29-b1be-e2ad3ebf48e5
+# ╠═68352214-bfa9-473c-a021-b7143bf4385c
+# ╠═52b37179-5617-4791-8df6-e905b2940b45
+# ╠═f5d63436-d0d4-42ab-a7a5-dd982798aca3
+# ╠═5a04ef11-e73f-4bfa-a746-62c76c4419f9
+# ╠═ad0ef5fe-4d17-449a-b200-671d1d2370be
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
