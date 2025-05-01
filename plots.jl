@@ -25,14 +25,11 @@ md"""
 | Muhammad Fakhar | 7432447 |
 """
 
-# ╔═╡ 8ab6534e-ebe2-45ce-9ad8-9c0a2e29dcfc
-N = 100
-
-# ╔═╡ 4043541f-0460-4aa8-b308-1da900e6abfa
-η = 3.0
+# ╔═╡ 92215413-e7d5-43d2-aae7-179bda641a0d
+load(; N=100, η=3.0, cfl=0.5) =  DataFrame(CSV.File("results/results_$(N)_$(η)_$(cfl).csv"));
 
 # ╔═╡ 664b437d-fd53-4c47-a8f7-f362f8e3a5b0
-data = DataFrame(CSV.File("results/results_$(N)_$η.csv"));
+data = load(; cfl=0.5);
 
 # ╔═╡ bc415958-be50-40ce-9e4a-1678eaec3fbb
 plot(data.time, data.dt; xlabel="t", ylabel="dt", legend=false)
@@ -41,40 +38,65 @@ plot(data.time, data.dt; xlabel="t", ylabel="dt", legend=false)
 plot(data.time, data.h; xlabel="t", ylabel="h", legend=false)
 
 # ╔═╡ df0c8092-ad1c-40dc-8141-2154797cb8b0
-function closest_timestep(t)
+function closest_timestep(t; data=data)
 	i = findmin(eachrow(data)) do row
 		abs(row.time - t)
 	end[2]
 	data.time_step[i]
 end
 
-# ╔═╡ 74f12ae1-d77e-4bca-b750-48b0534e5c52
-time_steps = let
-	[closest_timestep(t) for t in [0.0, 0.1, 0.2, 0.3]]
-end
-
 # ╔═╡ c0ffde40-1d7c-4d29-b1be-e2ad3ebf48e5
-snapshot(i) = filter(data) do row
-	row.time_step == time_steps[i]
+snapshot(time_step; data=data) = filter(data) do row
+	row.time_step == time_step
 end;
 
 # ╔═╡ 68352214-bfa9-473c-a021-b7143bf4385c
-function plot_density(i)
-	s = snapshot(i);
-	plot(s.index, s.density, title="t≈$(round(s.time[1], digits=1))", xlabel="particle index", ylabel="density", label=false)
+function plot_density(time_step; kwargs...)
+	s = snapshot(time_step);
+	scatter(s.position, s.density; title="t≈$(round(s.time[1], digits=1))", xlabel="position", ylabel="density", label=false, ms=2, kwargs...)
 end
 
+# ╔═╡ 92e8fcb4-844f-464c-a629-63e06333c037
+t_max = round(maximum(data.time), digits=1)
+
+# ╔═╡ 8f13d3e4-7f26-4fe2-afd8-034f961c315d
+time_steps = [closest_timestep(t) for t in 0.0:0.1:t_max]
+
 # ╔═╡ 52b37179-5617-4791-8df6-e905b2940b45
-plot_density(1)
+plot_density(time_steps[1])
 
 # ╔═╡ f5d63436-d0d4-42ab-a7a5-dd982798aca3
-plot_density(2)
+plot_density(time_steps[2])
 
 # ╔═╡ 5a04ef11-e73f-4bfa-a746-62c76c4419f9
-plot_density(3)
+plot_density(time_steps[3])
 
 # ╔═╡ ad0ef5fe-4d17-449a-b200-671d1d2370be
-plot_density(4)
+plot_density(time_steps[4])
+
+# ╔═╡ 87ae01d5-ca17-49dc-b382-debb58788c50
+anim = @animate for ts in [closest_timestep(t) for t in 0.0:0.01:t_max]
+	plot_density(ts; xlims=(0, 20), ylims=(0, 3), ms=1)
+end;
+
+# ╔═╡ 0052fdc1-208f-49cd-a671-3bdc3d612079
+gif(anim; fps=30)
+
+# ╔═╡ 35291808-ee72-4f74-95af-9692d1bf4982
+total_energy(time_stamp; data=data) = sum(snapshot(time_stamp; data=data).energy)
+
+# ╔═╡ 0256d323-9e7b-4c47-86b6-07209584ce38
+let
+	plot(; xlabel="time", ylabel="total energy", ylims=(95, 115))
+	for cfl in [0.5, 5.0]
+		data = load(; cfl);
+		t_max = round(maximum(data.time), digits=1)
+		ts = 0.0:0.01:t_max
+		
+		plot!(ts, [total_energy(closest_timestep(t; data); data) for t in ts]; label="CFL $(cfl)")
+	end
+	plot!()
+end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -1311,18 +1333,22 @@ version = "1.4.1+2"
 # ╟─09c69108-503c-4464-80d7-e7cedba6a4f3
 # ╟─90d0227d-637f-4a88-93d3-b8d16123c089
 # ╟─d60977e0-2416-11f0-2727-1f96cfc68b5c
-# ╠═8ab6534e-ebe2-45ce-9ad8-9c0a2e29dcfc
-# ╠═4043541f-0460-4aa8-b308-1da900e6abfa
+# ╠═92215413-e7d5-43d2-aae7-179bda641a0d
 # ╠═664b437d-fd53-4c47-a8f7-f362f8e3a5b0
 # ╠═bc415958-be50-40ce-9e4a-1678eaec3fbb
 # ╠═a10a87dc-e5f3-4358-a044-4368820315a2
 # ╠═df0c8092-ad1c-40dc-8141-2154797cb8b0
-# ╠═74f12ae1-d77e-4bca-b750-48b0534e5c52
 # ╠═c0ffde40-1d7c-4d29-b1be-e2ad3ebf48e5
 # ╠═68352214-bfa9-473c-a021-b7143bf4385c
+# ╠═92e8fcb4-844f-464c-a629-63e06333c037
+# ╠═8f13d3e4-7f26-4fe2-afd8-034f961c315d
 # ╠═52b37179-5617-4791-8df6-e905b2940b45
 # ╠═f5d63436-d0d4-42ab-a7a5-dd982798aca3
 # ╠═5a04ef11-e73f-4bfa-a746-62c76c4419f9
 # ╠═ad0ef5fe-4d17-449a-b200-671d1d2370be
+# ╠═87ae01d5-ca17-49dc-b382-debb58788c50
+# ╠═0052fdc1-208f-49cd-a671-3bdc3d612079
+# ╠═35291808-ee72-4f74-95af-9692d1bf4982
+# ╠═0256d323-9e7b-4c47-86b6-07209584ce38
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

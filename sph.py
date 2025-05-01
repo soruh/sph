@@ -216,13 +216,13 @@ class State:
                 self.file.write(f"{time_step},{self.h},{self.dt},{time},{i},{self.r[i]},{self.v[i]},{self.rho[i]},{self.u[i]}\n")
 
 
-def initial_state(file, N, eta):
+def initial_state(file, N, eta, cfl):
 
-    cfl = 0.5
     gamma = 5/3
     c_s = 1.0
 
-    p = np.linspace(0.05, 0.95, N)
+    p = np.linspace(0.0, 1.0, N+2)[1:-1]
+    assert len(p) == N
     v = np.zeros(N)
     m = np.ones(N) / N
     u = np.ones(N) * np.sqrt(c_s)
@@ -233,20 +233,22 @@ def initial_state(file, N, eta):
     return state
 
 
-def main(file, N, eta):
+def main(file, N, eta, cfl):
     """perform the computation, optionally write the result to the passed in file `file`"""
 
-    state = initial_state(file, N, eta)
+    state = initial_state(file, N, eta, cfl)
 
-    T = 0.3
+    T = 1.0
     write_interval = 0.01
 
     # perfom simulations steps until the total time elapsed has reached the desired end time
     t = 0.0
     time_step = 0
     next_write = 0.0
-    while t < T:
-        print(f"performing timestep {time_step:6d} for t/T={t/T:.2%}")
+    last_write = -1
+    while True:
+        print(f"\rperforming timestep {time_step:6d} for t/T={t/T:.2%}", end='')
+        sys.stdout.flush()
         state.compute_smoothing_length()
         state.compute_density()
         state.compute_pressure()
@@ -258,15 +260,25 @@ def main(file, N, eta):
         if t >= next_write:
             state.write_to_file(time_step, t)
             next_write += write_interval
+            last_write = time_step
+
+        if t >= T:
+            break
 
         t += state.dt
         time_step += 1
 
+    # if we did not just write, write the final state
+    if last_write != time_step-1:
+         state.write_to_file(time_step-1, t-state.dt)
+
+    print()
 
 if __name__ == "__main__":
 
     N = int(sys.argv[1])
     eta = float(sys.argv[2])
+    cfl = float(sys.argv[3])
 
-    with open(f"results/results_{N}_{eta}.csv", "w") as f:
-        main(f, N, eta)
+    with open(f"results/results_{N}_{eta}_{cfl}.csv", "w") as f:
+        main(f, N, eta, cfl)
