@@ -1,4 +1,4 @@
-# Tutorial Exercise 3
+# Tutorial Exercise 4
 # Initial implementation for 1D Smoothed Particle Hydrodynamics solver
 #
 # authors:

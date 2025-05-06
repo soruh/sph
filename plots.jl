@@ -87,15 +87,16 @@ total_energy(time_stamp; data=data) = sum(snapshot(time_stamp; data=data).energy
 
 # ╔═╡ 0256d323-9e7b-4c47-86b6-07209584ce38
 let
+	u_0 = total_energy(closest_timestep(0.0))
 	plot(; xlabel="time", ylabel="total energy", ylims=(95, 115))
-	for cfl in [0.5, 5.0]
+	for cfl in [0.1, 0.5, 2.0, 5.0]
 		data = load(; cfl);
 		t_max = round(maximum(data.time), digits=1)
 		ts = 0.0:0.01:t_max
 		
 		plot!(ts, [total_energy(closest_timestep(t; data); data) for t in ts]; label="CFL $(cfl)")
 	end
-	plot!()
+	plot!(x -> u_0; lc=:black, ls=:dash, label="U0")
 end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
