@@ -10,6 +10,7 @@ let
 	using DataFrames
 	using Plots
 	using Markdown
+	using CurveFit
 end
 
 # ╔═╡ 09c69108-503c-4464-80d7-e7cedba6a4f3
@@ -32,10 +33,19 @@ load(; N=100, η=3.0, cfl=0.5) =  DataFrame(CSV.File("results/results_$(N)_$(η)
 data = load(; cfl=0.5);
 
 # ╔═╡ bc415958-be50-40ce-9e4a-1678eaec3fbb
+# ╠═╡ disabled = true
+#=╠═╡
 plot(data.time, data.dt; xlabel="t", ylabel="dt", legend=false)
+  ╠═╡ =#
 
 # ╔═╡ a10a87dc-e5f3-4358-a044-4368820315a2
+# ╠═╡ disabled = true
+#=╠═╡
 plot(data.time, data.h; xlabel="t", ylabel="h", legend=false)
+  ╠═╡ =#
+
+# ╔═╡ c263fe1d-8a04-404e-ad08-af691d191e91
+md"# Simulation state at different time steps"
 
 # ╔═╡ df0c8092-ad1c-40dc-8141-2154797cb8b0
 function closest_timestep(t; data=data)
@@ -51,9 +61,17 @@ snapshot(time_step; data=data) = filter(data) do row
 end;
 
 # ╔═╡ 68352214-bfa9-473c-a021-b7143bf4385c
-function plot_density(time_step; kwargs...)
-	s = snapshot(time_step);
+function plot_density(time_step; data=data, kwargs...)
+	s = snapshot(time_step; data);
 	scatter(s.position, s.density; title="t≈$(round(s.time[1], digits=1))", xlabel="position", ylabel="density", label=false, ms=2, kwargs...)
+end
+
+# ╔═╡ b723c979-e5f1-4bda-afc2-491872dfb42c
+function plot_velocity(time_step; data=data, kwargs...)
+	s = snapshot(time_step; data);
+	a, b = linear_fit(s.position, s.velocity)
+	scatter(s.position, s.velocity; title="t≈$(round(s.time[1], digits=1))", xlabel="position", ylabel="velocity", label=false, ms=2, kwargs...)
+	plot!(x -> a + b * x; lc=:black, ls=:dash, label="linear fit")
 end
 
 # ╔═╡ 92e8fcb4-844f-464c-a629-63e06333c037
@@ -61,6 +79,9 @@ t_max = round(maximum(data.time), digits=1)
 
 # ╔═╡ 8f13d3e4-7f26-4fe2-afd8-034f961c315d
 time_steps = [closest_timestep(t) for t in 0.0:0.1:t_max]
+
+# ╔═╡ 20927914-8ffd-40bd-829a-681e0f660af2
+md"## Density"
 
 # ╔═╡ 52b37179-5617-4791-8df6-e905b2940b45
 plot_density(time_steps[1])
@@ -74,41 +95,120 @@ plot_density(time_steps[3])
 # ╔═╡ ad0ef5fe-4d17-449a-b200-671d1d2370be
 plot_density(time_steps[4])
 
-# ╔═╡ 87ae01d5-ca17-49dc-b382-debb58788c50
+# ╔═╡ 85922533-a8d7-4ced-a8e3-c70d0e17f4ce
+md"## Velocity"
+
+# ╔═╡ fde2c482-8f1c-48fc-aeed-b12067033166
+plot_velocity(time_steps[1])
+
+# ╔═╡ cc615d13-a150-477c-a2e4-b77dbf1cd60d
+plot_velocity(time_steps[2])
+
+# ╔═╡ 79ecdae8-ec11-4904-b1f5-84ef8c5ee80b
+plot_velocity(time_steps[3])
+
+# ╔═╡ ea5cbf75-aa3d-495d-97d2-066694863464
+plot_velocity(time_steps[4])
+
+# ╔═╡ 9e678af8-1d9c-48ab-87d1-42e8a54c9cba
+md"## Deviation from Hubble"
+
+# ╔═╡ 4c97d405-4e5e-4f45-a387-3baad54d2168
+function velocity_deviation_from_linear(time_step; data=data, kwargs...)
+	s = snapshot(time_step; data);
+	a, b = linear_fit(s.position, s.velocity)
+	
+	sqrt(sum(((a + b * s.position[i]) - s.velocity[i])^2 for i in 1:length(s.position)))
+end
+
+# ╔═╡ 250dd04b-db89-4346-9be1-4991e4696788
+let
+	plot(; xlabel="time", ylabel="Deviation from Hubble Flow", xlims=(0, 3))
+	for η in [2.0, 3.0, 5.0, 25.0, 30.0, 40.0, 100.0]
+		try
+			data = load(;η=η)
+			t_max = maximum(data.time)
+			ts = 0.0:0.01:t_max
+			
+			time_steps = [closest_timestep(t; data) for t in ts]
+			times = map(rows->rows.time[1], snapshot.(time_steps; data))
+			Δ = [velocity_deviation_from_linear(ts; data=data) for ts in time_steps]
+			
+			plot!(times, Δ; label="η=$η")
+		catch
+		end
+	end
+	plot!()
+end
+
+# ╔═╡ 1f4c580c-44c5-438a-931c-e6a391ad7b48
+md"Increasing $\eta$, decreases the osciallatory deviations from a Hubble-like Flow as the flow is smoothed out further."
+
+# ╔═╡ 784cab8d-8887-4e54-bbdb-a26e4af264da
+md"## Animations"
+
+# ╔═╡ c38fbc7a-9884-44db-be3d-e6e557665510
 anim = @animate for ts in [closest_timestep(t) for t in 0.0:0.01:t_max]
-	plot_density(ts; xlims=(0, 20), ylims=(0, 3), ms=1)
+	plot_density(ts; xlims=(-5 + 0.5, 5 + 0.5), ylims=(0, 1.5), ms=1, xticks=0.5-5:1:0.5+5)
 end;
 
-# ╔═╡ 0052fdc1-208f-49cd-a671-3bdc3d612079
+# ╔═╡ 74f6f531-5474-4e3d-9bf7-d26cd757b4f1
 gif(anim; fps=30)
 
+# ╔═╡ 65d2db23-dbc7-4cb3-bc82-332901c339f8
+anim2 = @animate for ts in [closest_timestep(t) for t in 0.0:0.01:t_max]
+	plot_velocity(ts; xlims=(0, 20), ylims=(0, 30), ms=1)
+end;
+
+# ╔═╡ 2f83f43d-39f3-46f6-9a44-b122f01fbb40
+gif(anim2; fps=30)
+
+# ╔═╡ 5160c90f-75ae-42c2-b86d-524c3dee5c4b
+md"# Conservation of Energy"
+
 # ╔═╡ 35291808-ee72-4f74-95af-9692d1bf4982
-total_energy(time_stamp; data=data) = sum(snapshot(time_stamp; data=data).energy)
+function total_energy(time_stamp; data=data)
+	rows = snapshot(time_stamp; data=data)
+	sum(rows.energy .+ (rows.velocity.^2)/2)
+end
 
 # ╔═╡ 0256d323-9e7b-4c47-86b6-07209584ce38
 let
 	u_0 = total_energy(closest_timestep(0.0))
-	plot(; xlabel="time", ylabel="total energy", ylims=(95, 115))
-	for cfl in [0.1, 0.5, 2.0, 5.0]
-		data = load(; cfl);
-		t_max = round(maximum(data.time), digits=1)
-		ts = 0.0:0.01:t_max
-		
-		plot!(ts, [total_energy(closest_timestep(t; data); data) for t in ts]; label="CFL $(cfl)")
+	plot(; xlabel="time", ylabel="total energy") # , ylims=(95, 115)
+	for cfl in [0.01, 0.1, 0.5, 1.0]
+		try
+			data = load(; cfl);
+			t_max = maximum(data.time)
+			ts = 0.0:0.01:t_max
+
+			time_steps = [closest_timestep(t; data) for t in ts]
+			times = map(rows->rows.time[1], snapshot.(time_steps; data))
+			E = [total_energy(ts; data=data) for ts in time_steps]
+			
+			
+			plot!(times, E; label="CFL $(cfl)")
+		catch
+		end
 	end
-	plot!(x -> u_0; lc=:black, ls=:dash, label="U0")
+	plot!(x -> u_0; lc=:black, ls=:dash, label="inital Energy")
 end
+
+# ╔═╡ bf53a681-556a-4e7e-9324-e68bf9177f2e
+md"Reducing $\gamma_{cfl}$ slightly improves energy conservation, up to a point where, around $\gamma_{cfl}=2$, the simulation diverges due to the time steps becoming too large."
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
+CurveFit = "5a033b19-8c74-5913-a970-47c3779ef25c"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 Markdown = "d6f4376e-aef5-505a-96c1-9c027394607a"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 
 [compat]
 CSV = "~0.10.15"
+CurveFit = "~0.6.1"
 DataFrames = "~1.7.0"
 Plots = "~1.40.13"
 """
@@ -119,7 +219,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.11.5"
 manifest_format = "2.0"
-project_hash = "740966c5f3e91a6413a45668872a392387e5693e"
+project_hash = "e08f64ed20ef5bf5cec4b8057496432275d52799"
 
 [[deps.AliasTables]]
 deps = ["PtrArrays", "Random"]
@@ -223,6 +323,21 @@ git-tree-sha1 = "d9d26935a0bcffc87d2613ce14c527c99fc543fd"
 uuid = "f0e56b4a-5159-44fe-b623-3e5288b988bb"
 version = "2.5.0"
 
+[[deps.ConstructionBase]]
+git-tree-sha1 = "76219f1ed5771adbb096743bff43fb5fdd4c1157"
+uuid = "187b0558-2788-49d3-abe0-74a17ed4e7c9"
+version = "1.5.8"
+
+    [deps.ConstructionBase.extensions]
+    ConstructionBaseIntervalSetsExt = "IntervalSets"
+    ConstructionBaseLinearAlgebraExt = "LinearAlgebra"
+    ConstructionBaseStaticArraysExt = "StaticArrays"
+
+    [deps.ConstructionBase.weakdeps]
+    IntervalSets = "8197267c-284f-5f27-9208-e0e47529a953"
+    LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+    StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
+
 [[deps.Contour]]
 git-tree-sha1 = "439e35b0b36e2e5881738abc8857bd92ad6ff9a8"
 uuid = "d38c429a-6771-53c6-b99e-75d170b6e991"
@@ -232,6 +347,12 @@ version = "0.6.3"
 git-tree-sha1 = "249fe38abf76d48563e2f4556bebd215aa317e15"
 uuid = "a8cc5b0e-0ffa-5ad4-8c14-923d3ee1735f"
 version = "4.1.1"
+
+[[deps.CurveFit]]
+deps = ["LinearAlgebra", "Polynomials"]
+git-tree-sha1 = "d2190fa1164b0eded41d9631852225e632d1f84a"
+uuid = "5a033b19-8c74-5913-a970-47c3779ef25c"
+version = "0.6.1"
 
 [[deps.DataAPI]]
 git-tree-sha1 = "abe83f3a2f1b857aac70ef8b269080af17764bbe"
@@ -765,6 +886,24 @@ version = "1.40.13"
     ImageInTerminal = "d8c32880-2388-543b-8c61-d9f865259254"
     Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
+[[deps.Polynomials]]
+deps = ["LinearAlgebra", "OrderedCollections", "RecipesBase", "Requires", "Setfield", "SparseArrays"]
+git-tree-sha1 = "555c272d20fc80a2658587fb9bbda60067b93b7c"
+uuid = "f27b6e38-b328-58d1-80ce-0feddd5e7a45"
+version = "4.0.19"
+
+    [deps.Polynomials.extensions]
+    PolynomialsChainRulesCoreExt = "ChainRulesCore"
+    PolynomialsFFTWExt = "FFTW"
+    PolynomialsMakieCoreExt = "MakieCore"
+    PolynomialsMutableArithmeticsExt = "MutableArithmetics"
+
+    [deps.Polynomials.weakdeps]
+    ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
+    FFTW = "7a1cc6ca-52ef-59f5-83cd-3a7055c09341"
+    MakieCore = "20f20a25-4f0e-4fdf-b5d1-57303727442b"
+    MutableArithmetics = "d8a4904e-b15c-11e9-3269-09a3773c0cb0"
+
 [[deps.PooledArrays]]
 deps = ["DataAPI", "Future"]
 git-tree-sha1 = "36d8b4b899628fb92c2749eb488d884a926614d3"
@@ -882,6 +1021,12 @@ version = "1.4.8"
 uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
 version = "1.11.0"
 
+[[deps.Setfield]]
+deps = ["ConstructionBase", "Future", "MacroTools", "StaticArraysCore"]
+git-tree-sha1 = "c5391c6ace3bc430ca630251d02ea9687169ca68"
+uuid = "efcf1570-3423-57d1-acb7-fd33fddbac46"
+version = "1.1.2"
+
 [[deps.Showoff]]
 deps = ["Dates", "Grisu"]
 git-tree-sha1 = "91eddf657aca81df9ae6ceb20b959ae5653ad1de"
@@ -913,6 +1058,11 @@ deps = ["Random"]
 git-tree-sha1 = "83e6cce8324d49dfaf9ef059227f91ed4441a8e5"
 uuid = "860ef19b-820b-49d6-a774-d7a799459cd3"
 version = "1.0.2"
+
+[[deps.StaticArraysCore]]
+git-tree-sha1 = "192954ef1208c7019899fbf8049e717f92959682"
+uuid = "1e83bf80-4336-4d27-bf5d-d5a4f845583c"
+version = "1.4.3"
 
 [[deps.Statistics]]
 deps = ["LinearAlgebra"]
@@ -1336,20 +1486,37 @@ version = "1.4.1+2"
 # ╟─d60977e0-2416-11f0-2727-1f96cfc68b5c
 # ╠═92215413-e7d5-43d2-aae7-179bda641a0d
 # ╠═664b437d-fd53-4c47-a8f7-f362f8e3a5b0
-# ╠═bc415958-be50-40ce-9e4a-1678eaec3fbb
-# ╠═a10a87dc-e5f3-4358-a044-4368820315a2
+# ╟─bc415958-be50-40ce-9e4a-1678eaec3fbb
+# ╟─a10a87dc-e5f3-4358-a044-4368820315a2
+# ╟─c263fe1d-8a04-404e-ad08-af691d191e91
 # ╠═df0c8092-ad1c-40dc-8141-2154797cb8b0
 # ╠═c0ffde40-1d7c-4d29-b1be-e2ad3ebf48e5
 # ╠═68352214-bfa9-473c-a021-b7143bf4385c
+# ╠═b723c979-e5f1-4bda-afc2-491872dfb42c
 # ╠═92e8fcb4-844f-464c-a629-63e06333c037
 # ╠═8f13d3e4-7f26-4fe2-afd8-034f961c315d
+# ╟─20927914-8ffd-40bd-829a-681e0f660af2
 # ╠═52b37179-5617-4791-8df6-e905b2940b45
 # ╠═f5d63436-d0d4-42ab-a7a5-dd982798aca3
 # ╠═5a04ef11-e73f-4bfa-a746-62c76c4419f9
 # ╠═ad0ef5fe-4d17-449a-b200-671d1d2370be
-# ╠═87ae01d5-ca17-49dc-b382-debb58788c50
-# ╠═0052fdc1-208f-49cd-a671-3bdc3d612079
+# ╟─85922533-a8d7-4ced-a8e3-c70d0e17f4ce
+# ╠═fde2c482-8f1c-48fc-aeed-b12067033166
+# ╠═cc615d13-a150-477c-a2e4-b77dbf1cd60d
+# ╠═79ecdae8-ec11-4904-b1f5-84ef8c5ee80b
+# ╠═ea5cbf75-aa3d-495d-97d2-066694863464
+# ╟─9e678af8-1d9c-48ab-87d1-42e8a54c9cba
+# ╠═4c97d405-4e5e-4f45-a387-3baad54d2168
+# ╠═250dd04b-db89-4346-9be1-4991e4696788
+# ╟─1f4c580c-44c5-438a-931c-e6a391ad7b48
+# ╟─784cab8d-8887-4e54-bbdb-a26e4af264da
+# ╠═c38fbc7a-9884-44db-be3d-e6e557665510
+# ╠═74f6f531-5474-4e3d-9bf7-d26cd757b4f1
+# ╠═65d2db23-dbc7-4cb3-bc82-332901c339f8
+# ╠═2f83f43d-39f3-46f6-9a44-b122f01fbb40
+# ╟─5160c90f-75ae-42c2-b86d-524c3dee5c4b
 # ╠═35291808-ee72-4f74-95af-9692d1bf4982
 # ╠═0256d323-9e7b-4c47-86b6-07209584ce38
+# ╟─bf53a681-556a-4e7e-9324-e68bf9177f2e
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

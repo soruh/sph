@@ -11,28 +11,6 @@ import numpy as np
 import sys
 
 
-# def W(h, s):
-#     """smoothing kernel W"""
-#     # use M4 kernel as shown in instructuions
-#     if 0 <= s and s <= 1:
-#         return 2/(3 * h) * (1 - 3/2 * s**2 + 3/4 * s**3)
-#     elif 1 <= s and s <= 2:
-#         return 2/(12 * h) * (2 - s)**3
-#     else:
-#         return 0
-
-
-# def dW(h, s):
-#     """gradient of smoothing kernel W"""
-#     # use M4 kernel as shown in instructuions
-#     if 0 <= s and s <= 1:
-#         return 2/h**2 * (-s + 3/4 * s**2)
-#     elif 1 <= s and s <= 2:
-#         return -1/(2 * h**2) * (2 - s)**2
-#     else:
-#         return 0
-
-
 # numpy vectorized implemenation of the smoothing kernel
 def W(s, h):
     s = np.asarray(s)
@@ -41,10 +19,11 @@ def W(s, h):
     mask1 = (s >= 0) & (s <= 1)
     mask2 = (s > 1) & (s <= 2)
 
-    result[mask1] = 1 - 1.5 * s[mask1]**2 + 0.75 * s[mask1]**3
-    result[mask2] = 0.25 * (2 - s[mask2])**3
+    result[mask1] = 1 - 1.5 * s[mask1] ** 2 + 0.75 * s[mask1] ** 3
+    result[mask2] = 0.25 * (2 - s[mask2]) ** 3
 
     return (2 / (3 * h)) * result
+
 
 # numpy vectorized implemenation of the smoothing kernel derivative
 def dW(s, h):
@@ -54,8 +33,8 @@ def dW(s, h):
     mask1 = (s >= 0) & (s <= 1)
     mask2 = (s > 1) & (s <= 2)
 
-    result[mask1] = -3 * s[mask1] + (9/4) * s[mask1]**2
-    result[mask2] = -0.75 * (2 - s[mask2])**2
+    result[mask1] = -3 * s[mask1] + (9 / 4) * s[mask1] ** 2
+    result[mask2] = -0.75 * (2 - s[mask2]) ** 2
 
     return (2 / (3 * h**2)) * result
 
@@ -63,17 +42,16 @@ def dW(s, h):
 class Parameters:
     """free parameters of the SPH simulation"""
 
-    def __init__(self, gamma, c_s, eta, cfl):
+    def __init__(self, gamma, u0, eta, cfl):
         """
         gamma: specific heat ratio
-        c_s: speed of sound
+         u0: initial velocity
         eta: order of unity
         cfl: time step size as a fraction of the maximum stable timestep
         """
 
         self.gamma = gamma
-        self.c_s = c_s
-        self.u0 = c_s**2
+        self.u0 = u0
         self.eta = eta
         self.cfl = cfl
 
@@ -81,7 +59,15 @@ class Parameters:
 class State:
     """structure storing the simulation state"""
 
-    def __init__(self, param: Parameters, file, m: np.array, r: np.array, v: np.array, u: np.array):
+    def __init__(
+        self,
+        param: Parameters,
+        file,
+        m: np.array,
+        r: np.array,
+        v: np.array,
+        u: np.array,
+    ):
         """
         initialize the state and set the initial conditions and free parameters of the system
             file: file to write the results to
@@ -145,7 +131,7 @@ class State:
         a j particle is a neighbor of particle i if |r_i - r_j| <= 2h (including the particle itself)
         """
         # find all indices in self.r for which |r_i - r_j| <= 2h
-        return np.where(np.abs(self.r[i] - self.r) <= 2*self.h)[0]
+        return np.where(np.abs(self.r[i] - self.r) <= 2 * self.h)[0]
 
     def compute_density(self):
         """compute the current density at each particle position"""
@@ -162,10 +148,12 @@ class State:
         """compute the forces -> accelerations acting on each particle from the current pressure, density and particle positions (as well as particle masses)"""
         for i in range(self.N):
             neighbors = self.neighbors_of(i)
-            dP = (self.P[i]/self.rho[i]**2) + self.P[neighbors]/self.rho[neighbors]**2
+            dP = (self.P[i] / self.rho[i] ** 2) + self.P[neighbors] / self.rho[
+                neighbors
+            ] ** 2
             r_ij = self.r[i] - self.r[neighbors]
             s = np.abs(r_ij) / self.h
-            self.a[i] = -np.sum(self.m[neighbors] * dP * dW(s, self.h) * np.sign(self.r[neighbors]))
+            self.a[i] = -np.sum(self.m[neighbors] * dP * dW(s, self.h) * np.sign(r_ij))
 
     def compute_energy_flux(self):
         for i in range(self.N):
@@ -173,7 +161,11 @@ class State:
             r_ij = self.r[i] - self.r[neighbors]
             s = np.abs(r_ij) / self.h
             dv = self.v[i] - self.v[neighbors]
-            self.du[i] = self.P[i]/self.rho[i]**2 * np.sum(self.m[neighbors] * dv * dW(s, self.h) * np.sign(self.r[neighbors]))
+            self.du[i] = (
+                self.P[i]
+                / self.rho[i] ** 2
+                * np.sum(self.m[neighbors] * dv * dW(s, self.h) * np.sign(r_ij))
+            )
 
     def determine_timestep(self):
         """
@@ -181,15 +173,26 @@ class State:
         condition for every particle
         """
 
-        epsilon = 1e-8
-
+        # compute velocity divergence
         dv = np.zeros_like(self.v)
         for i in range(self.N):
             neighbors = self.neighbors_of(i)
-            s = np.abs(self.r[i] - self.r[neighbors]) / self.h
-            dv[i] = np.sum(self.m[neighbors] / self.rho[neighbors] * self.v[neighbors] * dW(s, self.h))
+            r_ij = self.r[i] - self.r[neighbors]
+            s = np.abs(r_ij) / self.h
+            dv[i] = np.sum(
+                self.m[neighbors]
+                / self.rho[neighbors]
+                * self.v[neighbors]
+                * dW(s, self.h)
+                * np.sign(r_ij)
+            )
 
-        a = self.h / (self.h * np.abs(dv) + self.param.c_s)
+        # compute local speed of sound
+        c_s = np.sqrt(self.param.gamma * (self.param.gamma - 1) * self.u)
+
+        epsilon = 1e-8
+
+        a = self.h / (self.h * np.abs(dv) + c_s)
         b = np.sqrt(self.h / (np.abs(self.a) + epsilon))
         self.dt = self.param.cfl * np.min(np.minimum(a, b))
 
@@ -209,25 +212,29 @@ class State:
         if self.file is not None:
 
             if not self.wrote_header:
-                self.file.write("time_step,h,dt,time,index,position,velocity,density,energy\n")
-                self.wrote_header = True;
+                self.file.write(
+                    "time_step,h,dt,time,index,position,velocity,density,energy\n"
+                )
+                self.wrote_header = True
 
             for i in range(self.N):
-                self.file.write(f"{time_step},{self.h},{self.dt},{time},{i},{self.r[i]},{self.v[i]},{self.rho[i]},{self.u[i]}\n")
+                self.file.write(
+                    f"{time_step},{self.h},{self.dt},{time},{i},{self.r[i]},{self.v[i]},{self.rho[i]},{self.u[i]}\n"
+                )
 
 
 def initial_state(file, N, eta, cfl):
 
-    gamma = 5/3
-    c_s = 1.0
+    gamma = 5 / 3
+    u0 = 1.0
 
-    p = np.linspace(0.0, 1.0, N+2)[1:-1]
+    p = np.linspace(0.0, 1.0, N + 2)[1:-1]
     assert len(p) == N
     v = np.zeros(N)
     m = np.ones(N) / N
-    u = np.ones(N) * np.sqrt(c_s)
+    u = np.ones(N) * u0
 
-    params = Parameters(gamma, c_s, eta, cfl)
+    params = Parameters(gamma, u0, eta, cfl)
     state = State(params, file, m, p, v, u)
 
     return state
@@ -238,7 +245,7 @@ def main(file, N, eta, cfl):
 
     state = initial_state(file, N, eta, cfl)
 
-    T = 1.0
+    T = 3.0
     write_interval = 0.01
 
     # perfom simulations steps until the total time elapsed has reached the desired end time
@@ -247,7 +254,7 @@ def main(file, N, eta, cfl):
     next_write = 0.0
     last_write = -1
     while True:
-        print(f"\rperforming timestep {time_step:6d} for t/T={t/T:.2%}", end='')
+        print(f"\rperforming timestep {time_step:6d} for t/T={t/T:.2%}", end="")
         sys.stdout.flush()
         state.compute_smoothing_length()
         state.compute_density()
@@ -262,17 +269,17 @@ def main(file, N, eta, cfl):
             next_write += write_interval
             last_write = time_step
 
-        if t >= T:
+        if state.dt <= 0:
+            break
+
+        if t >= T or t < 0 or np.isnan(t):
             break
 
         t += state.dt
         time_step += 1
 
-    # if we did not just write, write the final state
-    if last_write != time_step-1:
-         state.write_to_file(time_step-1, t-state.dt)
-
     print()
+
 
 if __name__ == "__main__":
 
