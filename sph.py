@@ -104,11 +104,11 @@ class State:
         self.r = r
         self.v = v
         self.u = u
-        self.du = np.zeros(self.N)
-        self.a = np.zeros(self.N)
-        self.P = np.zeros(self.N)
         self.rho = np.zeros(self.N)
+        self.a = np.zeros(self.N)
+        self.du = np.zeros(self.N)
         self.c_s = np.zeros(self.N)
+        self.P = np.zeros(self.N)
 
     @property
     def N(self):
@@ -128,7 +128,7 @@ class State:
         min_dists[-1] = diff[-1]
 
         # mean minimum neighbor distance
-        self.h = eta * np.mean(min_dists)
+        self.h = self.param.eta * np.mean(min_dists)
 
     def neighbors_of(self, i):
         """
@@ -252,41 +252,78 @@ class State:
 
             if not self.wrote_header:
                 self.file.write(
-                    "time_step,h,dt,time,index,position,velocity,density,energy\n"
+                    "time_step,h,dt,time,index,position,velocity,density,energy,pressure\n"
                 )
                 self.wrote_header = True
 
             for i in range(self.N):
                 self.file.write(
-                    f"{time_step},{self.h},{self.dt},{time},{i},{self.r[i]},{self.v[i]},{self.rho[i]},{self.u[i]}\n"
+                    f"{time_step},{self.h},{self.dt},{time},{i},{self.r[i]},{self.v[i]},{self.rho[i]},{self.u[i]},{self.P[i]}\n"
                 )
 
 
-def initial_state(file, N, eta, cfl, alpha):
+def setup_homogenous(file, N, eta, cfl):
 
     gamma = 5 / 3
     u0 = 1.0
 
-    p = np.linspace(0.0, 1.0, N + 2)[1:-1]
-    assert len(p) == N
+    r = np.linspace(0.0, 1.0, N + 2)[1:-1]
+    assert len(r) == N
     v = np.zeros(N)
     m = np.ones(N) / N
     u = np.ones(N) * u0
 
-    params = Parameters(gamma, u0, eta, cfl, alpha)
-    state = State(params, file, m, p, v, u)
+    params = Parameters(gamma, u0, eta, cfl, 1.0)
+    state = State(params, file, m, r, v, u)
 
     return state
 
 
-def main(file, N, eta, cfl):
+def setup_sod_shock(file, N, alpha):
+
+    x_min, x_max = -0.5, 1.5
+    x_shock = 0.5
+
+    eta = 2
+    cfl = 0.1
+    gamma = 1.4
+    u0 = 1.0
+
+    # space particles evenly
+    x = np.linspace(x_min, x_max, N)
+    dx = x[1] - x[0]
+
+    mask_pre = x <= x_shock
+    mask_post = x > x_shock
+
+    # target values
+    P = np.zeros(N)
+    P[mask_pre] = 1.0
+    P[mask_post] = 0.1
+
+    rho = np.zeros(N)
+    rho[mask_pre] = 1.0
+    rho[mask_post] = 0.125
+
+    v = np.zeros(N)
+
+    # compute initial conditions to reach target values
+    u = P / ((gamma - 1) * rho)
+    m = rho * dx
+
+    params = Parameters(gamma, u0, eta, cfl, alpha)
+    state = State(params, file, m, x, v, u)
+
+    return state
+
+
+def main(file, N, alpha):
     """perform the computation, optionally write the result to the passed in file `file`"""
 
-    alpha = 1
+    # state = setup_homogenous(file, N, eta, cfl)
+    state = setup_sod_shock(file, N, alpha)
 
-    state = initial_state(file, N, eta, cfl, alpha)
-
-    T = 3.0
+    T = 0.2
     write_interval = 0.01
 
     # perfom simulations steps until the total time elapsed has reached the desired end time
@@ -305,21 +342,24 @@ def main(file, N, eta, cfl):
         state.compute_speed_of_sound()
         state.artificial_viscosity()
         state.determine_timestep()
+
+        if time_step == 0:
+            state.write_to_file(time_step, t)
+
         state.forward_euler_timestep()
 
-        if t >= next_write:
+        t += state.dt
+        time_step += 1
+
+        done = state.dt <= 0 or t >= T or t < 0 or np.isnan(t)
+
+        if t >= next_write or done:
             state.write_to_file(time_step, t)
             next_write += write_interval
             last_write = time_step
 
-        if state.dt <= 0:
+        if done:
             break
-
-        if t >= T or t < 0 or np.isnan(t):
-            break
-
-        t += state.dt
-        time_step += 1
 
     print()
 
@@ -327,8 +367,7 @@ def main(file, N, eta, cfl):
 if __name__ == "__main__":
 
     N = int(sys.argv[1])
-    eta = float(sys.argv[2])
-    cfl = float(sys.argv[3])
+    alpha = float(sys.argv[2])
 
-    with open(f"results/results_{N}_{eta}_{cfl}.csv", "w") as f:
-        main(f, N, eta, cfl)
+    with open(f"results/shock_{N}_{alpha}.csv", "w") as f:
+        main(f, N, alpha)

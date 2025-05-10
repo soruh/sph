@@ -27,10 +27,10 @@ md"""
 """
 
 # ╔═╡ 92215413-e7d5-43d2-aae7-179bda641a0d
-load(; N=100, η=3.0, cfl=0.5) =  DataFrame(CSV.File("results/results_$(N)_$(η)_$(cfl).csv"));
+load(N, α) = DataFrame(CSV.File("results/shock_$(N)_$(α).csv"));
 
 # ╔═╡ 664b437d-fd53-4c47-a8f7-f362f8e3a5b0
-data = load(; cfl=0.5);
+data = load(200, 0.1);
 
 # ╔═╡ bc415958-be50-40ce-9e4a-1678eaec3fbb
 # ╠═╡ disabled = true
@@ -66,6 +66,12 @@ function plot_density(time_step; data=data, kwargs...)
 	scatter(s.position, s.density; title="t≈$(round(s.time[1], digits=1))", xlabel="position", ylabel="density", label=false, ms=2, kwargs...)
 end
 
+# ╔═╡ 8c11d17e-3d71-4fa7-95ba-7d53ca2be1f7
+function plot_pressure(time_step; data=data, kwargs...)
+	s = snapshot(time_step; data);
+	scatter(s.position, s.pressure; title="t≈$(round(s.time[1], digits=1))", xlabel="position", ylabel="pressure", label=false, ms=2, kwargs...)
+end
+
 # ╔═╡ b723c979-e5f1-4bda-afc2-491872dfb42c
 function plot_velocity(time_step; data=data, kwargs...)
 	s = snapshot(time_step; data);
@@ -82,6 +88,18 @@ time_steps = [closest_timestep(t) for t in 0.0:0.1:t_max]
 
 # ╔═╡ 20927914-8ffd-40bd-829a-681e0f660af2
 md"## Density"
+
+# ╔═╡ 9c243967-b2db-4298-8536-102fe36fa5b1
+let
+	plot_density(0)
+	plot!(x -> 0.125; lc=:black, ls=:dash, label=false)
+end
+
+# ╔═╡ 775a70cf-0e84-4235-bd3f-73619e9b1cae
+let
+	plot_pressure(0)
+	plot!(x -> 0.1; lc=:black, ls=:dash, label=false)
+end
 
 # ╔═╡ 52b37179-5617-4791-8df6-e905b2940b45
 plot_density(time_steps[1])
@@ -1493,10 +1511,13 @@ version = "1.4.1+2"
 # ╠═df0c8092-ad1c-40dc-8141-2154797cb8b0
 # ╠═c0ffde40-1d7c-4d29-b1be-e2ad3ebf48e5
 # ╠═68352214-bfa9-473c-a021-b7143bf4385c
+# ╠═8c11d17e-3d71-4fa7-95ba-7d53ca2be1f7
 # ╠═b723c979-e5f1-4bda-afc2-491872dfb42c
 # ╠═92e8fcb4-844f-464c-a629-63e06333c037
 # ╠═8f13d3e4-7f26-4fe2-afd8-034f961c315d
 # ╟─20927914-8ffd-40bd-829a-681e0f660af2
+# ╠═9c243967-b2db-4298-8536-102fe36fa5b1
+# ╠═775a70cf-0e84-4235-bd3f-73619e9b1cae
 # ╠═52b37179-5617-4791-8df6-e905b2940b45
 # ╠═f5d63436-d0d4-42ab-a7a5-dd982798aca3
 # ╠═5a04ef11-e73f-4bfa-a746-62c76c4419f9
