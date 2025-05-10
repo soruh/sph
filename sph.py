@@ -10,6 +10,8 @@
 import numpy as np
 import sys
 
+epsilon = 1e-12
+
 
 # numpy vectorized implemenation of the smoothing kernel
 def W(s, h):
@@ -42,7 +44,7 @@ def dW(s, h):
 class Parameters:
     """free parameters of the SPH simulation"""
 
-    def __init__(self, gamma, u0, eta, cfl):
+    def __init__(self, gamma, u0, eta, cfl, alpha):
         """
         gamma: specific heat ratio
          u0: initial velocity
@@ -54,6 +56,8 @@ class Parameters:
         self.u0 = u0
         self.eta = eta
         self.cfl = cfl
+        self.alpha = alpha
+        self.beta = 2 * alpha
 
 
 class State:
@@ -104,6 +108,7 @@ class State:
         self.a = np.zeros(self.N)
         self.P = np.zeros(self.N)
         self.rho = np.zeros(self.N)
+        self.c_s = np.zeros(self.N)
 
     @property
     def N(self):
@@ -167,6 +172,9 @@ class State:
                 * np.sum(self.m[neighbors] * dv * dW(s, self.h) * np.sign(r_ij))
             )
 
+    def compute_speed_of_sound(self):
+        self.c_s[:] = np.sqrt(self.param.gamma * (self.param.gamma - 1) * self.u)
+
     def determine_timestep(self):
         """
         determine the global timestep to use based on the minimum timestep necessary to fullfill a CFL
@@ -187,14 +195,45 @@ class State:
                 * np.sign(r_ij)
             )
 
-        # compute local speed of sound
-        c_s = np.sqrt(self.param.gamma * (self.param.gamma - 1) * self.u)
+        dv = np.abs(dv)
 
-        epsilon = 1e-8
-
-        a = self.h / (self.h * np.abs(dv) + c_s)
+        a = self.h / (self.h * dv + self.c_s)
         b = np.sqrt(self.h / (np.abs(self.a) + epsilon))
-        self.dt = self.param.cfl * np.min(np.minimum(a, b))
+        c = self.h / (
+            (1.0 + 1.2 * self.param.alpha) * self.c_s  #
+            + (1.0 + 1.2 * self.param.beta) * self.h * dv
+        )
+        self.dt = self.param.cfl * np.min(np.minimum(a, b, c))
+
+    def artificial_viscosity(self):
+        for i in range(self.N):
+            neighbors = self.neighbors_of(i)
+
+            r_ij = self.r[i] - self.r[neighbors]
+            v_ij = self.v[i] - self.v[neighbors]
+            vr_ij = v_ij * r_ij
+            mask = np.where(vr_ij < 0.0)[0]  # not <= to prevent divide by zero
+            full_mask = neighbors[mask]
+
+            r_ij = r_ij[mask]
+            v_ij = v_ij[mask]
+            vr_ij = vr_ij[mask]
+
+            rho_ij = (self.rho[i] + self.rho[full_mask]) / 2.0
+            v_sig = (
+                self.c_s[i]
+                - self.c_s[full_mask]
+                - self.param.beta * vr_ij / np.abs(r_ij)
+            )
+
+            Pi = (self.param.alpha * v_sig * vr_ij) / (2.0 * rho_ij * r_ij)
+            Lambda = (self.param.alpha * v_sig * vr_ij**2) / (2.0 * rho_ij * r_ij**2)
+
+            s = np.abs(r_ij) / self.h
+            m = self.m[full_mask]
+
+            self.a[i] += np.sum(m * Pi * dW(s, self.h))
+            self.du[i] += np.sum(m * Lambda * dW(s, self.h) * np.sign(r_ij))
 
     def forward_euler_timestep(self):
         """
@@ -223,7 +262,7 @@ class State:
                 )
 
 
-def initial_state(file, N, eta, cfl):
+def initial_state(file, N, eta, cfl, alpha):
 
     gamma = 5 / 3
     u0 = 1.0
@@ -234,7 +273,7 @@ def initial_state(file, N, eta, cfl):
     m = np.ones(N) / N
     u = np.ones(N) * u0
 
-    params = Parameters(gamma, u0, eta, cfl)
+    params = Parameters(gamma, u0, eta, cfl, alpha)
     state = State(params, file, m, p, v, u)
 
     return state
@@ -243,7 +282,9 @@ def initial_state(file, N, eta, cfl):
 def main(file, N, eta, cfl):
     """perform the computation, optionally write the result to the passed in file `file`"""
 
-    state = initial_state(file, N, eta, cfl)
+    alpha = 1
+
+    state = initial_state(file, N, eta, cfl, alpha)
 
     T = 3.0
     write_interval = 0.01
@@ -261,6 +302,8 @@ def main(file, N, eta, cfl):
         state.compute_pressure()
         state.compute_forces()
         state.compute_energy_flux()
+        state.compute_speed_of_sound()
+        state.artificial_viscosity()
         state.determine_timestep()
         state.forward_euler_timestep()
 

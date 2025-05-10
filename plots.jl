@@ -174,7 +174,6 @@ end
 
 # ╔═╡ 0256d323-9e7b-4c47-86b6-07209584ce38
 let
-	u_0 = total_energy(closest_timestep(0.0))
 	plot(; xlabel="time", ylabel="total energy") # , ylims=(95, 115)
 	for cfl in [0.01, 0.1, 0.5, 1.0]
 		try
@@ -191,7 +190,9 @@ let
 		catch
 		end
 	end
-	plot!(x -> u_0; lc=:black, ls=:dash, label="inital Energy")
+	u_0 = total_energy(closest_timestep(0.0))
+	# plot!(x -> u_0; lc=:black, ls=:dash, label="inital Energy")
+	plot!()
 end
 
 # ╔═╡ bf53a681-556a-4e7e-9324-e68bf9177f2e
