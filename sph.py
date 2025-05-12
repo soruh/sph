@@ -324,7 +324,7 @@ def main(file, N, alpha):
     state = setup_sod_shock(file, N, alpha)
 
     T = 0.2
-    write_interval = 0.01
+    write_interval = 0.001
 
     # perfom simulations steps until the total time elapsed has reached the desired end time
     t = 0.0

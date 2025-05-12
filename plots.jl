@@ -11,6 +11,7 @@ let
 	using Plots
 	using Markdown
 	using CurveFit
+	using Printf
 end
 
 # ╔═╡ 09c69108-503c-4464-80d7-e7cedba6a4f3
@@ -29,21 +30,6 @@ md"""
 # ╔═╡ 92215413-e7d5-43d2-aae7-179bda641a0d
 load(N, α) = DataFrame(CSV.File("results/shock_$(N)_$(α).csv"));
 
-# ╔═╡ 664b437d-fd53-4c47-a8f7-f362f8e3a5b0
-data = load(200, 0.1);
-
-# ╔═╡ bc415958-be50-40ce-9e4a-1678eaec3fbb
-# ╠═╡ disabled = true
-#=╠═╡
-plot(data.time, data.dt; xlabel="t", ylabel="dt", legend=false)
-  ╠═╡ =#
-
-# ╔═╡ a10a87dc-e5f3-4358-a044-4368820315a2
-# ╠═╡ disabled = true
-#=╠═╡
-plot(data.time, data.h; xlabel="t", ylabel="h", legend=false)
-  ╠═╡ =#
-
 # ╔═╡ c263fe1d-8a04-404e-ad08-af691d191e91
 md"# Simulation state at different time steps"
 
@@ -53,168 +39,122 @@ function closest_timestep(t; data=data)
 		abs(row.time - t)
 	end[2]
 	data.time_step[i]
-end
+end;
 
 # ╔═╡ c0ffde40-1d7c-4d29-b1be-e2ad3ebf48e5
 snapshot(time_step; data=data) = filter(data) do row
 	row.time_step == time_step
 end;
 
-# ╔═╡ 68352214-bfa9-473c-a021-b7143bf4385c
-function plot_density(time_step; data=data, kwargs...)
-	s = snapshot(time_step; data);
-	scatter(s.position, s.density; title="t≈$(round(s.time[1], digits=1))", xlabel="position", ylabel="density", label=false, ms=2, kwargs...)
-end
-
-# ╔═╡ 8c11d17e-3d71-4fa7-95ba-7d53ca2be1f7
-function plot_pressure(time_step; data=data, kwargs...)
-	s = snapshot(time_step; data);
-	scatter(s.position, s.pressure; title="t≈$(round(s.time[1], digits=1))", xlabel="position", ylabel="pressure", label=false, ms=2, kwargs...)
-end
-
-# ╔═╡ b723c979-e5f1-4bda-afc2-491872dfb42c
-function plot_velocity(time_step; data=data, kwargs...)
-	s = snapshot(time_step; data);
-	a, b = linear_fit(s.position, s.velocity)
-	scatter(s.position, s.velocity; title="t≈$(round(s.time[1], digits=1))", xlabel="position", ylabel="velocity", label=false, ms=2, kwargs...)
-	plot!(x -> a + b * x; lc=:black, ls=:dash, label="linear fit")
-end
-
-# ╔═╡ 92e8fcb4-844f-464c-a629-63e06333c037
-t_max = round(maximum(data.time), digits=1)
-
-# ╔═╡ 8f13d3e4-7f26-4fe2-afd8-034f961c315d
-time_steps = [closest_timestep(t) for t in 0.0:0.1:t_max]
+# ╔═╡ d25517ef-7c9a-498f-8b6e-87c18e9d63ee
+get_field_values(rows, field::Symbol) = [row[field] for row in eachrow(rows)];
 
 # ╔═╡ 20927914-8ffd-40bd-829a-681e0f660af2
-md"## Density"
+md"## Setup"
+
+# ╔═╡ 277c3191-8bd1-4624-b1ba-3dac71d4d12a
+setup = snapshot(0; data=load(200, 0.1));
 
 # ╔═╡ 9c243967-b2db-4298-8536-102fe36fa5b1
 let
-	plot_density(0)
-	plot!(x -> 0.125; lc=:black, ls=:dash, label=false)
+	scatter(setup.position, setup.density; ms=2, label=false, yticks=0:0.125:1, ylims=(0, 1.01), xlabel="position", ylabel="density", title="initial conditions")
 end
 
 # ╔═╡ 775a70cf-0e84-4235-bd3f-73619e9b1cae
 let
-	plot_pressure(0)
-	plot!(x -> 0.1; lc=:black, ls=:dash, label=false)
+	scatter(setup.position, setup.pressure; ms=2, label=false, yticks=0:0.1:1, ylims=(0, 1.01), xlabel="position", ylabel="pressure", title="initial conditions")
 end
 
-# ╔═╡ 52b37179-5617-4791-8df6-e905b2940b45
-plot_density(time_steps[1])
+# ╔═╡ d85bfca5-f0b0-48d7-9e43-10f855e8f183
+md"# Simulations"
 
-# ╔═╡ f5d63436-d0d4-42ab-a7a5-dd982798aca3
-plot_density(time_steps[2])
-
-# ╔═╡ 5a04ef11-e73f-4bfa-a746-62c76c4419f9
-plot_density(time_steps[3])
-
-# ╔═╡ ad0ef5fe-4d17-449a-b200-671d1d2370be
-plot_density(time_steps[4])
-
-# ╔═╡ 85922533-a8d7-4ced-a8e3-c70d0e17f4ce
-md"## Velocity"
-
-# ╔═╡ fde2c482-8f1c-48fc-aeed-b12067033166
-plot_velocity(time_steps[1])
-
-# ╔═╡ cc615d13-a150-477c-a2e4-b77dbf1cd60d
-plot_velocity(time_steps[2])
-
-# ╔═╡ 79ecdae8-ec11-4904-b1f5-84ef8c5ee80b
-plot_velocity(time_steps[3])
-
-# ╔═╡ ea5cbf75-aa3d-495d-97d2-066694863464
-plot_velocity(time_steps[4])
-
-# ╔═╡ 9e678af8-1d9c-48ab-87d1-42e8a54c9cba
-md"## Deviation from Hubble"
-
-# ╔═╡ 4c97d405-4e5e-4f45-a387-3baad54d2168
-function velocity_deviation_from_linear(time_step; data=data, kwargs...)
-	s = snapshot(time_step; data);
-	a, b = linear_fit(s.position, s.velocity)
-	
-	sqrt(sum(((a + b * s.position[i]) - s.velocity[i])^2 for i in 1:length(s.position)))
-end
-
-# ╔═╡ 250dd04b-db89-4346-9be1-4991e4696788
-let
-	plot(; xlabel="time", ylabel="Deviation from Hubble Flow", xlims=(0, 3))
-	for η in [2.0, 3.0, 5.0, 25.0, 30.0, 40.0, 100.0]
+# ╔═╡ ca554b99-6be4-4af1-8dd6-a93ea2d7cc8b
+function plot_for_N(N, field::Symbol; t = 0.2, αs=[0.01, 0.1, 1.0])
+	plot(; xlabel="position", ylabel="$field", title="N=$N at t≈$(@sprintf("%.3f", t))", leg=:topright, xlims=(0, 1));
+	for α in αs
 		try
-			data = load(;η=η)
-			t_max = maximum(data.time)
-			ts = 0.0:0.01:t_max
-			
-			time_steps = [closest_timestep(t; data) for t in ts]
-			times = map(rows->rows.time[1], snapshot.(time_steps; data))
-			Δ = [velocity_deviation_from_linear(ts; data=data) for ts in time_steps]
-			
-			plot!(times, Δ; label="η=$η")
-		catch
-		end
+			data = load(N, α);
+			s = snapshot(closest_timestep(t; data); data);
+			scatter!(s.position, get_field_values(s, field); label="α=$α", ms=2)
+		catch end
 	end
 	plot!()
-end
+end;
 
-# ╔═╡ 1f4c580c-44c5-438a-931c-e6a391ad7b48
-md"Increasing $\eta$, decreases the osciallatory deviations from a Hubble-like Flow as the flow is smoothed out further."
+# ╔═╡ 8862e511-d8c2-478e-bc15-1e6dfd8fc646
+md"## Density"
+
+# ╔═╡ c0ec44e3-6263-4398-a883-b68b7a45a9a2
+plot_for_N(200, :density)
+
+# ╔═╡ dd00afaf-cdd1-4af2-89eb-0a074d3b0a43
+plot_for_N(1000, :density)
+
+# ╔═╡ 7263a4db-4dd8-46a5-ab37-9a4adcabd183
+plot_for_N(2000, :density)
+
+# ╔═╡ 18c1792b-109f-4d03-bd2c-dd33665ea5c9
+md"## Pressure"
+
+# ╔═╡ af8ff267-3ac4-436d-8755-f3294d7eed37
+plot_for_N(200, :pressure)
+
+# ╔═╡ 5fa23734-449e-46e6-91b8-1bdfe028bb0c
+plot_for_N(1000, :pressure)
+
+# ╔═╡ ac38a586-9efd-4df7-80ac-656c8f3aba29
+plot_for_N(2000, :pressure)
+
+# ╔═╡ 7d4df768-dfee-45d4-a916-5da56d407367
+md"## Velocity"
+
+# ╔═╡ db347d70-e442-4070-b5a0-c9276604780c
+plot_for_N(200, :velocity)
+
+# ╔═╡ 9b47a54c-8665-438f-886f-e631bfb4c39f
+plot_for_N(1000, :velocity)
+
+# ╔═╡ 6d9d6bf2-1c23-4c03-af9b-cd5beddd23f0
+plot_for_N(2000, :velocity)
 
 # ╔═╡ 784cab8d-8887-4e54-bbdb-a26e4af264da
 md"## Animations"
 
-# ╔═╡ c38fbc7a-9884-44db-be3d-e6e557665510
-anim = @animate for ts in [closest_timestep(t) for t in 0.0:0.01:t_max]
-	plot_density(ts; xlims=(-5 + 0.5, 5 + 0.5), ylims=(0, 1.5), ms=1, xticks=0.5-5:1:0.5+5)
-end;
+# ╔═╡ 7b473e2a-53e6-490c-9777-b789f596ae52
+N_anim = 2000;
 
-# ╔═╡ 74f6f531-5474-4e3d-9bf7-d26cd757b4f1
-gif(anim; fps=30)
+# ╔═╡ 4acd9ccb-43c9-407a-9597-5dd47c609050
+αs_anim = [0.01, 1.0];
+
+# ╔═╡ 92e8fcb4-844f-464c-a629-63e06333c037
+t_max = maximum(α -> maximum(load(N_anim, α).time), αs_anim)
+
+# ╔═╡ c38fbc7a-9884-44db-be3d-e6e557665510
+let
+	anim = @animate for t in 0.0:0.002:t_max
+		plot_for_N(N_anim, :density; t=t, αs=αs_anim)
+		plot!(; ylims=(0, 1.1))
+	end;
+	gif(anim; fps=30)
+end
 
 # ╔═╡ 65d2db23-dbc7-4cb3-bc82-332901c339f8
-anim2 = @animate for ts in [closest_timestep(t) for t in 0.0:0.01:t_max]
-	plot_velocity(ts; xlims=(0, 20), ylims=(0, 30), ms=1)
-end;
-
-# ╔═╡ 2f83f43d-39f3-46f6-9a44-b122f01fbb40
-gif(anim2; fps=30)
-
-# ╔═╡ 5160c90f-75ae-42c2-b86d-524c3dee5c4b
-md"# Conservation of Energy"
-
-# ╔═╡ 35291808-ee72-4f74-95af-9692d1bf4982
-function total_energy(time_stamp; data=data)
-	rows = snapshot(time_stamp; data=data)
-	sum(rows.energy .+ (rows.velocity.^2)/2)
-end
-
-# ╔═╡ 0256d323-9e7b-4c47-86b6-07209584ce38
 let
-	plot(; xlabel="time", ylabel="total energy") # , ylims=(95, 115)
-	for cfl in [0.01, 0.1, 0.5, 1.0]
-		try
-			data = load(; cfl);
-			t_max = maximum(data.time)
-			ts = 0.0:0.01:t_max
-
-			time_steps = [closest_timestep(t; data) for t in ts]
-			times = map(rows->rows.time[1], snapshot.(time_steps; data))
-			E = [total_energy(ts; data=data) for ts in time_steps]
-			
-			
-			plot!(times, E; label="CFL $(cfl)")
-		catch
-		end
-	end
-	u_0 = total_energy(closest_timestep(0.0))
-	# plot!(x -> u_0; lc=:black, ls=:dash, label="inital Energy")
-	plot!()
+	anim = @animate for t in 0.0:0.002:t_max
+		plot_for_N(N_anim, :pressure; t=t, αs=αs_anim)
+		plot!(; ylims=(0, 1.1))
+	end;
+	gif(anim; fps=30)
 end
 
-# ╔═╡ bf53a681-556a-4e7e-9324-e68bf9177f2e
-md"Reducing $\gamma_{cfl}$ slightly improves energy conservation, up to a point where, around $\gamma_{cfl}=2$, the simulation diverges due to the time steps becoming too large."
+# ╔═╡ 1345fa24-bb43-4638-8bd0-17f2ff1b8297
+let
+	anim = @animate for t in 0.0:0.002:t_max
+		plot_for_N(N_anim, :velocity; t=t, αs=αs_anim)
+		plot!(; ylims=(-2, 3))
+	end;
+	gif(anim; fps=30)
+end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -224,6 +164,7 @@ CurveFit = "5a033b19-8c74-5913-a970-47c3779ef25c"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 Markdown = "d6f4376e-aef5-505a-96c1-9c027394607a"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 
 [compat]
 CSV = "~0.10.15"
@@ -238,7 +179,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.11.5"
 manifest_format = "2.0"
-project_hash = "e08f64ed20ef5bf5cec4b8057496432275d52799"
+project_hash = "76f556484064e7ec65135918e3152b6ceb57ee1d"
 
 [[deps.AliasTables]]
 deps = ["PtrArrays", "Random"]
@@ -1504,41 +1445,34 @@ version = "1.4.1+2"
 # ╟─90d0227d-637f-4a88-93d3-b8d16123c089
 # ╟─d60977e0-2416-11f0-2727-1f96cfc68b5c
 # ╠═92215413-e7d5-43d2-aae7-179bda641a0d
-# ╠═664b437d-fd53-4c47-a8f7-f362f8e3a5b0
-# ╟─bc415958-be50-40ce-9e4a-1678eaec3fbb
-# ╟─a10a87dc-e5f3-4358-a044-4368820315a2
 # ╟─c263fe1d-8a04-404e-ad08-af691d191e91
 # ╠═df0c8092-ad1c-40dc-8141-2154797cb8b0
 # ╠═c0ffde40-1d7c-4d29-b1be-e2ad3ebf48e5
-# ╠═68352214-bfa9-473c-a021-b7143bf4385c
-# ╠═8c11d17e-3d71-4fa7-95ba-7d53ca2be1f7
-# ╠═b723c979-e5f1-4bda-afc2-491872dfb42c
-# ╠═92e8fcb4-844f-464c-a629-63e06333c037
-# ╠═8f13d3e4-7f26-4fe2-afd8-034f961c315d
+# ╠═d25517ef-7c9a-498f-8b6e-87c18e9d63ee
 # ╟─20927914-8ffd-40bd-829a-681e0f660af2
+# ╠═277c3191-8bd1-4624-b1ba-3dac71d4d12a
 # ╠═9c243967-b2db-4298-8536-102fe36fa5b1
 # ╠═775a70cf-0e84-4235-bd3f-73619e9b1cae
-# ╠═52b37179-5617-4791-8df6-e905b2940b45
-# ╠═f5d63436-d0d4-42ab-a7a5-dd982798aca3
-# ╠═5a04ef11-e73f-4bfa-a746-62c76c4419f9
-# ╠═ad0ef5fe-4d17-449a-b200-671d1d2370be
-# ╟─85922533-a8d7-4ced-a8e3-c70d0e17f4ce
-# ╠═fde2c482-8f1c-48fc-aeed-b12067033166
-# ╠═cc615d13-a150-477c-a2e4-b77dbf1cd60d
-# ╠═79ecdae8-ec11-4904-b1f5-84ef8c5ee80b
-# ╠═ea5cbf75-aa3d-495d-97d2-066694863464
-# ╟─9e678af8-1d9c-48ab-87d1-42e8a54c9cba
-# ╠═4c97d405-4e5e-4f45-a387-3baad54d2168
-# ╠═250dd04b-db89-4346-9be1-4991e4696788
-# ╟─1f4c580c-44c5-438a-931c-e6a391ad7b48
+# ╟─d85bfca5-f0b0-48d7-9e43-10f855e8f183
+# ╠═ca554b99-6be4-4af1-8dd6-a93ea2d7cc8b
+# ╟─8862e511-d8c2-478e-bc15-1e6dfd8fc646
+# ╟─c0ec44e3-6263-4398-a883-b68b7a45a9a2
+# ╟─dd00afaf-cdd1-4af2-89eb-0a074d3b0a43
+# ╟─7263a4db-4dd8-46a5-ab37-9a4adcabd183
+# ╟─18c1792b-109f-4d03-bd2c-dd33665ea5c9
+# ╟─af8ff267-3ac4-436d-8755-f3294d7eed37
+# ╟─5fa23734-449e-46e6-91b8-1bdfe028bb0c
+# ╟─ac38a586-9efd-4df7-80ac-656c8f3aba29
+# ╟─7d4df768-dfee-45d4-a916-5da56d407367
+# ╟─db347d70-e442-4070-b5a0-c9276604780c
+# ╟─9b47a54c-8665-438f-886f-e631bfb4c39f
+# ╟─6d9d6bf2-1c23-4c03-af9b-cd5beddd23f0
 # ╟─784cab8d-8887-4e54-bbdb-a26e4af264da
+# ╠═7b473e2a-53e6-490c-9777-b789f596ae52
+# ╠═4acd9ccb-43c9-407a-9597-5dd47c609050
+# ╠═92e8fcb4-844f-464c-a629-63e06333c037
 # ╠═c38fbc7a-9884-44db-be3d-e6e557665510
-# ╠═74f6f531-5474-4e3d-9bf7-d26cd757b4f1
 # ╠═65d2db23-dbc7-4cb3-bc82-332901c339f8
-# ╠═2f83f43d-39f3-46f6-9a44-b122f01fbb40
-# ╟─5160c90f-75ae-42c2-b86d-524c3dee5c4b
-# ╠═35291808-ee72-4f74-95af-9692d1bf4982
-# ╠═0256d323-9e7b-4c47-86b6-07209584ce38
-# ╟─bf53a681-556a-4e7e-9324-e68bf9177f2e
+# ╠═1345fa24-bb43-4638-8bd0-17f2ff1b8297
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
