@@ -30,9 +30,6 @@ md"""
 # ╔═╡ 92215413-e7d5-43d2-aae7-179bda641a0d
 load(N, α) = DataFrame(CSV.File("results/shock_$(N)_$(α).csv"));
 
-# ╔═╡ c263fe1d-8a04-404e-ad08-af691d191e91
-md"# Simulation state at different time steps"
-
 # ╔═╡ df0c8092-ad1c-40dc-8141-2154797cb8b0
 function closest_timestep(t; data=data)
 	i = findmin(eachrow(data)) do row
@@ -1445,7 +1442,6 @@ version = "1.4.1+2"
 # ╟─90d0227d-637f-4a88-93d3-b8d16123c089
 # ╟─d60977e0-2416-11f0-2727-1f96cfc68b5c
 # ╠═92215413-e7d5-43d2-aae7-179bda641a0d
-# ╟─c263fe1d-8a04-404e-ad08-af691d191e91
 # ╠═df0c8092-ad1c-40dc-8141-2154797cb8b0
 # ╠═c0ffde40-1d7c-4d29-b1be-e2ad3ebf48e5
 # ╠═d25517ef-7c9a-498f-8b6e-87c18e9d63ee
